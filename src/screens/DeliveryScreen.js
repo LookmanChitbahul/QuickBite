@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, StatusBar, Text, Dimensions } from 
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import { useApp } from '../context/AppContext';
+import { darkMapStyle, deuteranopiaMapStyle, protanopiaMapStyle, tritanopiaMapStyle } from '../data/mapStyles';
 
 const { width, height } = Dimensions.get('window');
 
@@ -10,25 +11,29 @@ const { width, height } = Dimensions.get('window');
 const DEFAULT_LOC = { latitude: -20.2443, longitude: 57.4882 }; // Port Louis/Bagatelle Area
 
 export default function DeliveryScreen({ navigation, route }) {
-    const { isDarkMode, restaurantLocation, restaurants, ownerRestaurantId } = useApp();
+    const { isDarkMode, colorBlindType, restaurantLocation, restaurants, ownerRestaurantId } = useApp();
     const mapRef = useRef(null);
 
     const myRestaurant = useMemo(() => restaurants.find(r => r.id === ownerRestaurantId), [restaurants, ownerRestaurantId]);
-
     const location = useMemo(() => route?.params?.location || restaurantLocation || DEFAULT_LOC, [route?.params?.location, restaurantLocation]);
-
     const restaurantName = useMemo(() => route?.params?.restaurantName || myRestaurant?.name || "QuickBite Restaurant", [route?.params?.restaurantName, myRestaurant]);
 
-    // Optimize marker rendering by disabling tracksViewChanges after initial render
     const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
     useEffect(() => {
-        // Allow the marker to render once, then freeze it to save performance
-        const timer = setTimeout(() => {
-            setTracksViewChanges(false);
-        }, 500);
+        const timer = setTimeout(() => setTracksViewChanges(false), 500);
         return () => clearTimeout(timer);
     }, [location]);
+
+    const getMapStyle = () => {
+        if (colorBlindType === 'deuteranopia') return deuteranopiaMapStyle;
+        if (colorBlindType === 'protanopia') return protanopiaMapStyle;
+        if (colorBlindType === 'tritanopia') return tritanopiaMapStyle;
+        if (isDarkMode) return darkMapStyle;
+        return [];
+    };
+
+    const markerColor = colorBlindType !== 'none' ? '#0072B2' : '#EF4444'; // Use Okabe-Ito Blue for accessibility
 
     return (
         <View style={styles.container}>
@@ -37,6 +42,7 @@ export default function DeliveryScreen({ navigation, route }) {
             <MapView
                 ref={mapRef}
                 style={styles.map}
+                customMapStyle={getMapStyle()}
                 initialRegion={{
                     latitude: location.latitude,
                     longitude: location.longitude,
@@ -54,13 +60,10 @@ export default function DeliveryScreen({ navigation, route }) {
                     tracksViewChanges={tracksViewChanges}
                 >
                     <View style={styles.finalMarkerWrapper}>
-                        {/* THE NAME - Above the pin */}
-                        <Text style={styles.pureTextName}>{restaurantName}</Text>
+                        <Text style={[styles.pureTextName, { color: markerColor }]}>{restaurantName}</Text>
 
-                        {/* THE PIN - Using a standard Icon with a dot. 
-                            Icons are much more stable in custom markers. */}
                         <View style={styles.pinBodyWithDot}>
-                            <Ionicons name="location" size={54} color="#EF4444" />
+                            <Ionicons name="location" size={54} color={markerColor} />
                             <View style={styles.dotInsidePin} />
                         </View>
                     </View>
@@ -69,7 +72,7 @@ export default function DeliveryScreen({ navigation, route }) {
 
             <TouchableOpacity
                 style={[styles.floatingBackBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF' }]}
-                onPress={() => navigation.goBack()}
+                onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home')}
             >
                 <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#FFFFFF' : '#111827'} />
             </TouchableOpacity>

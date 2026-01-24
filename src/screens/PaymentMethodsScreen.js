@@ -1,91 +1,72 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions, Image, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
 
 export default function PaymentMethodsScreen({ navigation }) {
     const context = useApp();
 
-    // Guard against missing context
     if (!context) return null;
 
-    const { theme, isDarkMode, paymentMethods, addPaymentMethod } = context;
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [cardDetails, setCardDetails] = useState({
-        number: '',
-        expiry: '',
-        cvc: '',
-        zip: '',
-        name: ''
-    });
+    const { theme, isDarkMode, orders } = context;
+    const [tempProof, setTempProof] = useState(null);
+    const [paymentProofs, setPaymentProofs] = useState([]);
 
-    // Safe variables
     const bgColor = theme?.colors?.background || '#F9FAFB';
     const cardColor = theme?.colors?.card || '#FFFFFF';
     const textColor = theme?.colors?.text || '#111827';
     const textLightColor = theme?.colors?.textLight || '#6B7280';
     const primaryColor = theme?.colors?.primary || '#F59E0B';
-    const inputColor = theme?.colors?.input || '#F3F4F6';
-    const mutedColor = theme?.colors?.muted || '#9CA3AF';
     const borderColor = theme?.colors?.border || '#E5E7EB';
     const successColor = theme?.colors?.success || '#10B981';
     const primaryLightColor = theme?.colors?.primaryLight || 'rgba(245, 158, 11, 0.1)';
 
-    const safePaymentMethods = paymentMethods || [];
+    const banks = [
+        { name: 'MCB Juice', logo: 'wallet', color: '#E11D48', url: 'https://www.mcb.mu/en/personal/banking/juice' },
+        { name: 'SBM Pocket', logo: 'business', color: '#1E40AF', url: 'https://www.sbmgroup.mu/personal/digital-banking/sbm-pocket' },
+    ];
 
-    const handleAddCard = () => {
-        if (cardDetails.number.length < 16 || cardDetails.expiry.length < 4 || cardDetails.cvc.length < 3) {
-            Alert.alert('Invalid Input', 'Please fill in all fields correctly.');
+    const pickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
             return;
         }
 
-        const newMethod = {
-            id: Date.now().toString(),
-            type: 'Visa', // Auto-detect in real app
-            last4: cardDetails.number.slice(-4),
-            icon: 'card',
-            expiry: cardDetails.expiry,
-            name: cardDetails.name || 'Card Holder'
-        };
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: 'images',
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 1,
+        });
 
-        addPaymentMethod(newMethod);
-        setShowAddForm(false);
-        setCardDetails({ number: '', expiry: '', cvc: '', zip: '', name: '' });
-        Alert.alert('Success', 'Payment method added successfully.');
+        if (!result.canceled) {
+            setTempProof(result.assets[0].uri);
+        }
     };
 
-    const renderCard = (method) => (
-        <LinearGradient
-            key={method.id}
-            colors={['#1e293b', '#0f172a']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.cardEntry}
-        >
-            <View style={styles.cardHeader}>
-                <Ionicons name="card" size={32} color="#fff" />
-                <Text style={styles.cardTypeName}>{method.type}</Text>
-            </View>
+    const confirmInsert = () => {
+        const newProof = {
+            id: Date.now().toString(),
+            uri: tempProof,
+            date: new Date().toLocaleString()
+        };
+        setPaymentProofs([newProof, ...paymentProofs]);
+        setTempProof(null);
+        Alert.alert('Success', 'Payment proof inserted and saved to your profile.');
+    };
 
-            <View style={styles.cardBody}>
-                <Text style={styles.cardNumberText}>•••• •••• •••• {method.last4}</Text>
-            </View>
+    const removeProof = (id) => {
+        setPaymentProofs(paymentProofs.filter(p => p.id !== id));
+    };
 
-            <View style={styles.cardFooter}>
-                <View>
-                    <Text style={styles.cardLabel}>CARD HOLDER</Text>
-                    <Text style={styles.cardValue}>{method.name || 'JOHN DOE'}</Text>
-                </View>
-                <View>
-                    <Text style={styles.cardLabel}>EXPIRES</Text>
-                    <Text style={styles.cardValue}>{method.expiry || '12/28'}</Text>
-                </View>
-            </View>
-        </LinearGradient>
-    );
+    const openBankLink = (url) => {
+        Linking.openURL(url).catch(err => Alert.alert("Error", "Could not open banking link. Please ensure the app is installed."));
+    };
 
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -93,102 +74,111 @@ export default function PaymentMethodsScreen({ navigation }) {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={textColor} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: textColor }]}>Online Payment</Text>
-                <TouchableOpacity onPress={() => setShowAddForm(true)} style={styles.addButton}>
-                    <Ionicons name="add" size={24} color={primaryColor} />
-                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: textColor }]}>Internet Banking</Text>
+                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                <Text style={[styles.sectionHeading, { color: textLightColor }]}>Saved Cards</Text>
 
-                {safePaymentMethods.length > 0 ? (
-                    safePaymentMethods.map(renderCard)
-                ) : (
-                    <View style={styles.emptyState}>
-                        <Ionicons name="card-outline" size={64} color={mutedColor} />
-                        <Text style={[styles.emptyText, { color: mutedColor }]}>No cards saved yet.</Text>
-                    </View>
-                )}
-
-                <TouchableOpacity
-                    style={[styles.addNewButton, { backgroundColor: cardColor, borderColor: borderColor }]}
-                    onPress={() => setShowAddForm(true)}
-                >
-                    <View style={[styles.addIconBg, { backgroundColor: primaryLightColor }]}>
-                        <Ionicons name="add" size={24} color={primaryColor} />
-                    </View>
-                    <Text style={[styles.addNewText, { color: textColor }]}>Add New Payment Method</Text>
-                </TouchableOpacity>
-
-                <View style={[styles.safetyInfo, { paddingBottom: 40 }]}>
-                    <Ionicons name="shield-checkmark" size={16} color={successColor} />
-                    <Text style={[styles.safetyText, { color: textLightColor }]}>
-                        Your payment information is encrypted and secure.
-                    </Text>
+                <Text style={[styles.sectionHeading, { color: textLightColor }]}>Quick Access to Banking</Text>
+                <View style={styles.bankLinksRow}>
+                    {banks.map((bank, index) => (
+                        <TouchableOpacity
+                            key={index}
+                            style={[styles.bankLinkItem, { backgroundColor: cardColor, borderColor: borderColor, width: (width - 60) / 2 }]}
+                            onPress={() => openBankLink(bank.url)}
+                        >
+                            <View style={[styles.bankCircle, { backgroundColor: bank.color }]}>
+                                <Ionicons name={bank.logo} size={24} color="#fff" />
+                            </View>
+                            <Text style={[styles.bankLinkLabel, { color: textColor }]}>{bank.name}</Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
-            </ScrollView>
 
-            {/* Modal for Adding Card */}
-            {showAddForm && (
-                <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
-                    <View style={[styles.formContainer, { backgroundColor: cardColor }]}>
-                        <Text style={[styles.formTitle, { color: textColor }]}>Card Details</Text>
+                <View style={styles.uploadSection}>
+                    <View style={styles.uploadHeader}>
+                        <Text style={[styles.sectionHeading, { color: textLightColor, marginBottom: 0 }]}>My Payment Assets</Text>
+                        <TouchableOpacity style={[styles.plusButton, { backgroundColor: primaryColor }]} onPress={pickImage}>
+                            <Ionicons name="add" size={28} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
 
-                        <TextInput
-                            placeholder="Cardholder Name"
-                            placeholderTextColor={textLightColor}
-                            style={[styles.input, { backgroundColor: inputColor, color: textColor }]}
-                            value={cardDetails.name}
-                            onChangeText={t => setCardDetails({ ...cardDetails, name: t })}
-                        />
-
-                        <TextInput
-                            placeholder="Card Number"
-                            placeholderTextColor={textLightColor}
-                            style={[styles.input, { backgroundColor: inputColor, color: textColor }]}
-                            keyboardType="numeric"
-                            maxLength={16}
-                            value={cardDetails.number}
-                            onChangeText={t => setCardDetails({ ...cardDetails, number: t })}
-                        />
-
-                        <View style={styles.row}>
-                            <TextInput
-                                placeholder="MM/YY"
-                                placeholderTextColor={textLightColor}
-                                style={[styles.input, styles.halfInput, { backgroundColor: inputColor, color: textColor }]}
-                                maxLength={5}
-                                value={cardDetails.expiry}
-                                onChangeText={t => setCardDetails({ ...cardDetails, expiry: t })}
-                            />
-                            <TextInput
-                                placeholder="CVC"
-                                placeholderTextColor={textLightColor}
-                                style={[styles.input, styles.halfInput, { backgroundColor: inputColor, color: textColor }]}
-                                keyboardType="numeric"
-                                maxLength={3}
-                                value={cardDetails.cvc}
-                                onChangeText={t => setCardDetails({ ...cardDetails, cvc: t })}
-                            />
+                    {tempProof && (
+                        <View style={[styles.tempProofContainer, { backgroundColor: cardColor, borderColor: primaryColor }]}>
+                            <Image source={{ uri: tempProof }} style={styles.tempImage} />
+                            <View style={styles.tempControls}>
+                                <Text style={[styles.tempText, { color: textColor }]}>Image Cropped & Ready</Text>
+                                <TouchableOpacity style={styles.insertBtn} onPress={confirmInsert}>
+                                    <Text style={styles.insertBtnText}>INSERT TO PROFILE</Text>
+                                    <Ionicons name="cloud-upload" size={18} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setTempProof(null)}>
+                                    <Text style={{ color: '#EF4444', marginTop: 10 }}>Cancel</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
+                    )}
 
-                        <TouchableOpacity
-                            style={[styles.saveButton, { backgroundColor: primaryColor }]}
-                            onPress={handleAddCard}
-                        >
-                            <Text style={styles.saveButtonText}>Save Card</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={() => setShowAddForm(false)}
-                        >
-                            <Text style={[styles.cancelButtonText, { color: mutedColor }]}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {paymentProofs.length > 0 && (
+                        paymentProofs.map((proof) => (
+                            <View key={proof.id} style={[styles.proofCard, { backgroundColor: cardColor, borderColor: borderColor }]}>
+                                <Image source={{ uri: proof.uri }} style={styles.proofImage} />
+                                <View style={styles.proofDetails}>
+                                    <Text style={[styles.proofDate, { color: textColor }]}>Saved on {proof.date}</Text>
+                                    <TouchableOpacity onPress={() => removeProof(proof.id)}>
+                                        <Text style={{ color: '#EF4444', fontWeight: 'bold', marginTop: 5 }}>Delete Asset</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <Ionicons name="bookmark" size={24} color={primaryColor} />
+                            </View>
+                        ))
+                    )}
                 </View>
-            )}
+
+                <View style={styles.ordersSection}>
+                    <Text style={[styles.sectionHeading, { color: textLightColor, marginTop: 20 }]}>Order Verification Photos</Text>
+
+                    {orders && orders.length > 0 ? (
+                        orders.map((order) => (
+                            <View key={order.id} style={[styles.orderProofCard, { backgroundColor: cardColor, borderColor: borderColor }]}>
+                                <View style={styles.orderProofHeader}>
+                                    <View>
+                                        <Text style={[styles.orderResName, { color: textColor }]}>{order.restaurantName}</Text>
+                                        <Text style={[styles.orderIdText, { color: textLightColor }]}>Order #{order.id.slice(-6).toUpperCase()}</Text>
+                                    </View>
+                                    <View style={[styles.statusBadge, { backgroundColor: order.status === 'Delivered' ? '#D1FAE5' : '#FEF3C7' }]}>
+                                        <Text style={[styles.statusText, { color: order.status === 'Delivered' ? '#065F46' : '#92400E' }]}>{order.status}</Text>
+                                    </View>
+                                </View>
+
+                                {order.paymentProof ? (
+                                    <View style={styles.orderProofContent}>
+                                        <Image source={{ uri: order.paymentProof }} style={styles.orderProofImg} />
+                                        <View style={styles.verificationStatus}>
+                                            <Ionicons name="shield-checkmark" size={18} color={successColor} />
+                                            <Text style={[styles.verificationText, { color: successColor }]}>Payment Verified</Text>
+                                        </View>
+                                    </View>
+                                ) : (
+                                    <View style={styles.noProofPlaceholder}>
+                                        <Ionicons name="alert-circle-outline" size={24} color="#EF4444" />
+                                        <Text style={{ color: '#EF4444', marginLeft: 8 }}>No verification photo found</Text>
+                                    </View>
+                                )}
+                                <Text style={[styles.orderTotal, { color: textColor }]}>Total Paid: Rs {order.total.toFixed(2)}</Text>
+                            </View>
+                        ))
+                    ) : (
+                        <View style={[styles.emptyOrders, { borderColor: borderColor }]}>
+                            <Ionicons name="receipt-outline" size={48} color={textLightColor} />
+                            <Text style={[styles.emptyText, { color: textLightColor }]}>No orders placed yet.</Text>
+                        </View>
+                    )}
+                </View>
+
+                <View style={{ height: 40 }} />
+            </ScrollView>
         </View>
     );
 }
@@ -205,7 +195,6 @@ const styles = StyleSheet.create({
     },
     backButton: { padding: 4 },
     headerTitle: { fontSize: 20, fontWeight: '800' },
-    addButton: { padding: 4 },
     content: { padding: 20 },
     sectionHeading: {
         fontSize: 14,
@@ -214,146 +203,90 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginBottom: 16
     },
-    cardEntry: {
-        width: '100%',
-        height: 200,
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 10
-    },
-    cardHeader: {
+    bankLinksRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: 30
     },
-    cardTypeName: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-        fontStyle: 'italic'
-    },
-    cardBody: {
-        marginBottom: 30
-    },
-    cardNumberText: {
-        color: '#fff',
-        fontSize: 22,
-        letterSpacing: 2,
-        fontWeight: '600'
-    },
-    cardFooter: {
-        flexDirection: 'row',
-        justifyContent: 'space-between'
-    },
-    cardLabel: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
-        marginBottom: 4
-    },
-    cardValue: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: 'bold',
-        textTransform: 'uppercase'
-    },
-    emptyState: {
+    bankLinkItem: {
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 40
-    },
-    emptyText: {
-        marginTop: 12,
-        fontSize: 16
-    },
-    addNewButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
+        padding: 12,
         borderRadius: 16,
         borderWidth: 1,
-        marginTop: 10
     },
-    addIconBg: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    bankCircle: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 16
+        marginBottom: 8
     },
-    addNewText: {
-        fontWeight: 'bold',
-        fontSize: 16
-    },
-    safetyInfo: {
-        flexDirection: 'row',
+    bankLinkLabel: { fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
+    uploadSection: { marginTop: 10 },
+    uploadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    plusButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 30,
-        paddingHorizontal: 20
-    },
-    safetyText: {
-        fontSize: 12,
-        marginLeft: 8,
-        textAlign: 'center'
-    },
-    overlay: {
-        position: 'absolute',
-        top: 0, bottom: 0, left: 0, right: 0,
-        justifyContent: 'center',
-        padding: 24,
-        zIndex: 100
-    },
-    formContainer: {
-        borderRadius: 30,
-        padding: 24,
+        elevation: 5,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.4,
-        shadowRadius: 30,
-        elevation: 20
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
     },
-    formTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        marginBottom: 24,
-        textAlign: 'center'
-    },
-    input: {
-        padding: 16,
-        borderRadius: 16,
-        marginBottom: 16,
-        fontSize: 16
-    },
-    row: {
+    tempProofContainer: {
+        borderRadius: 20,
+        padding: 15,
+        borderWidth: 2,
+        borderStyle: 'dashed',
         flexDirection: 'row',
-        justifyContent: 'space-between'
-    },
-    halfInput: {
-        width: '48%'
-    },
-    saveButton: {
-        padding: 18,
-        borderRadius: 18,
-        alignItems: 'center',
-        marginTop: 8
-    },
-    saveButtonText: {
-        color: '#fff',
-        fontWeight: '800',
-        fontSize: 16
-    },
-    cancelButton: {
-        padding: 16,
+        marginBottom: 20,
         alignItems: 'center'
     },
-    cancelButtonText: {
-        fontWeight: '700'
-    }
+    tempImage: { width: 80, height: 80, borderRadius: 10, marginRight: 15 },
+    tempControls: { flex: 1 },
+    tempText: { fontWeight: 'bold', marginBottom: 10 },
+    insertBtn: {
+        backgroundColor: '#F59E0B',
+        padding: 10,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    insertBtnText: { color: '#fff', fontWeight: 'bold', marginRight: 5, fontSize: 12 },
+    proofCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 12
+    },
+    proofImage: { width: 60, height: 60, borderRadius: 8, marginRight: 15 },
+    proofDetails: { flex: 1 },
+    proofDate: { fontSize: 12, fontWeight: '600' },
+    ordersSection: { marginTop: 10 },
+    orderProofCard: {
+        borderRadius: 20,
+        padding: 16,
+        borderWidth: 1,
+        marginBottom: 16
+    },
+    orderProofHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+    orderResName: { fontSize: 16, fontWeight: 'bold' },
+    orderIdText: { fontSize: 12 },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    statusText: { fontSize: 10, fontWeight: 'bold' },
+    orderProofContent: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.02)', padding: 10, borderRadius: 12 },
+    orderProofImg: { width: 70, height: 70, borderRadius: 8, marginRight: 15 },
+    verificationStatus: { flexDirection: 'row', alignItems: 'center' },
+    verificationText: { fontSize: 12, fontWeight: 'bold', marginLeft: 5 },
+    orderTotal: { marginTop: 12, fontSize: 14, fontWeight: 'bold', textAlign: 'right' },
+    noProofPlaceholder: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#FEF2F2', borderRadius: 12 },
+    emptyOrders: { height: 120, borderWidth: 1, borderStyle: 'dashed', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    emptyText: { marginTop: 10, fontSize: 14 }
 });

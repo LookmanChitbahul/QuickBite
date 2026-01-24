@@ -1,4 +1,4 @@
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY; // Using the key provided by user
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
 export const getChatResponse = async (messages, restaurants) => {
     try {
@@ -28,7 +28,7 @@ Limit your scope to food and restaurants in Mauritius. If asked about other coun
 
         const currentMessage = messages[messages.length - 1].content;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -60,6 +60,9 @@ Limit your scope to food and restaurants in Mauritius. If asked about other coun
 
         if (data.error) {
             console.error('Gemini API Error:', data.error);
+            if (data.error.message?.includes('API key expired') || data.error.reason === 'API_KEY_INVALID') {
+                return "Ayo! 😔 Your Gemini API key has expired or is invalid. Please update the EXPO_PUBLIC_GEMINI_API_KEY in your .env file with a fresh key from Google AI Studio.";
+            }
             return "Désolé! 😔 I'm having a little trouble connecting to my brain right now. Please try again in a moment.";
         }
 

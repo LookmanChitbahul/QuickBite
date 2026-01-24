@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { getChatResponse } from '../services/chatbotService';
@@ -24,9 +24,8 @@ export default function ChatbotScreen() {
         setIsLoading(true);
 
         try {
-            // Convert current messages to OpenAI format for context
             const apiMessages = messages
-                .filter(m => m.id !== '1') // Skip initial greeting
+                .filter(m => m.id !== '1')
                 .map(m => ({
                     role: m.sender === 'user' ? 'user' : 'assistant',
                     content: m.text
@@ -48,7 +47,10 @@ export default function ChatbotScreen() {
     };
 
     useEffect(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        // Use a small delay to ensure keyboard layout has finished adjusting
+        setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
     }, [messages, isLoading]);
 
     return (
@@ -65,7 +67,8 @@ export default function ChatbotScreen() {
                 ref={scrollViewRef}
                 style={styles.chatContainer}
                 contentContainerStyle={styles.chatContent}
-                showsVerticalScrollIndicator={false}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
             >
                 {messages.map((message) => (
                     <View
@@ -105,7 +108,7 @@ export default function ChatbotScreen() {
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
             >
                 <View style={[styles.inputContainer, { backgroundColor: theme.colors.card, borderTopColor: theme.colors.border }]}>
                     <TextInput
@@ -116,6 +119,7 @@ export default function ChatbotScreen() {
                         onChangeText={setInputText}
                         onSubmitEditing={handleSend}
                         editable={!isLoading}
+                        multiline={false}
                     />
                     <TouchableOpacity
                         style={[styles.sendButton, { backgroundColor: isLoading ? theme.colors.muted : theme.colors.primary }]}
@@ -142,6 +146,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 15,
         borderBottomWidth: 1,
+        paddingTop: Platform.OS === 'android' ? 40 : 15,
     },
     headerTitleContainer: {
         flexDirection: 'row',
@@ -161,11 +166,11 @@ const styles = StyleSheet.create({
     },
     chatContent: {
         padding: 20,
-        paddingBottom: 40,
+        paddingBottom: 20,
     },
     messageWrapper: {
         marginBottom: 15,
-        maxWidth: '80%',
+        maxWidth: '85%',
     },
     userMessageWrapper: {
         alignSelf: 'flex-end',
@@ -189,7 +194,8 @@ const styles = StyleSheet.create({
     },
     inputContainer: {
         flexDirection: 'row',
-        padding: 15,
+        padding: 12,
+        paddingBottom: Platform.OS === 'ios' ? 30 : 12,
         alignItems: 'center',
         borderTopWidth: 1,
     },
@@ -200,6 +206,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         marginRight: 10,
         fontSize: 16,
+        maxHeight: 100,
     },
     sendButton: {
         width: 44,

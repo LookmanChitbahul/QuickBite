@@ -68,5 +68,37 @@ export const darkTheme = {
   borderRadius: { s: 8, m: 12, l: 16, circle: 9999 },
 };
 
-const theme = lightTheme; // Default export for backwards compatibility
+export const colorBlindLightTheme = {
+  ...lightTheme,
+  mode: 'colorblind-light',
+  colors: {
+    ...lightTheme.colors,
+    primary: '#0072B2', // Okabe-Ito Blue
+    primaryDark: '#004c78',
+    primaryLight: '#cce3f0',
+    secondary: '#56B4E9', // Sky Blue
+    success: '#009E73', // Bluish Green (Distinguishable from red/orange)
+    successLight: '#e6f5f1',
+    error: '#D55E00',   // Vermillion (High contrast error)
+    muted: '#737373',
+  }
+};
+
+export const colorBlindDarkTheme = {
+  ...darkTheme,
+  mode: 'colorblind-dark',
+  colors: {
+    ...darkTheme.colors,
+    primary: '#56B4E9', // Sky Blue (More legible on dark)
+    primaryDark: '#0072B2',
+    primaryLight: 'rgba(86, 180, 233, 0.2)',
+    secondary: '#E69F00',
+    success: '#009E73',
+    successLight: 'rgba(0, 158, 115, 0.15)',
+    error: '#D55E00',
+    muted: '#a3a3a3',
+  }
+};
+
+const theme = lightTheme;
 export default theme;

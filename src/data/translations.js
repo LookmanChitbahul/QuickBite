@@ -12,7 +12,9 @@ export const translations = {
         favorites: 'Favorites',
         payment_methods: 'Payment Methods',
         logout: 'Log Out',
+        help: 'Help',
         version: 'Version',
+        owner_dashboard: 'Owner Dashboard',
 
         // Home
         greeting: 'Now',
@@ -63,6 +65,7 @@ export const translations = {
         more: 'More',
         push_notifications: 'Push Notifications',
         dark_mode: 'Dark Mode',
+        color_blind_mode: 'Color Blind Mode',
         location_services: 'Location Services',
         language: 'Language',
         privacy_policy: 'Privacy Policy',
@@ -90,7 +93,9 @@ export const translations = {
         favorites: 'Favoris',
         payment_methods: 'Modes de Paiement',
         logout: 'Déconnexion',
+        help: 'Aide',
         version: 'Version',
+        owner_dashboard: 'Tableau de Bord Propriétaire',
 
         // Home
         greeting: 'Maintenant',
@@ -141,6 +146,7 @@ export const translations = {
         more: 'Plus',
         push_notifications: 'Notifications Push',
         dark_mode: 'Mode Sombre',
+        color_blind_mode: 'Mode Dalto',
         location_services: 'Services de Localisation',
         language: 'Langue',
         privacy_policy: 'Politique de Confidentialité',
