@@ -12,10 +12,12 @@ import SettingsScreen from '../screens/SettingsScreen';
 import HelpScreen from '../screens/HelpScreen';
 import RestaurantDetailsScreen from '../screens/RestaurantDetailsScreen';
 import OwnerDashboardScreen from '../screens/OwnerDashboardScreen';
+import OwnerMenuEditorScreen from '../screens/OwnerMenuEditorScreen';
 import DeliveryScreen from '../screens/DeliveryScreen';
 import PaymentMethodsScreen from '../screens/PaymentMethodsScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
+import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 import CartScreen from '../screens/CartScreen';
 import theme from '../styles/theme';
 
@@ -55,8 +57,10 @@ export default function RootNavigator() {
           <Stack.Screen name="Help" component={HelpScreen} />
           <Stack.Screen name="RestaurantDetails" component={RestaurantDetailsScreen} />
           <Stack.Screen name="OwnerDashboard" component={OwnerDashboardScreen} />
+          <Stack.Screen name="OwnerMenuEditor" component={OwnerMenuEditorScreen} />
           <Stack.Screen name="Map" component={DeliveryScreen} />
           <Stack.Screen name="Cart" component={CartScreen} />
+          <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
         </>
       )}
     </Stack.Navigator>

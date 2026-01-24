@@ -1,23 +1,60 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Alert, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import theme from '../styles/theme';
-import PrimaryButton from '../components/PrimaryButton';
+import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 
 export default function CartScreen({ navigation }) {
-    const { cart, updateCartQuantity, removeFromCart, placeOrder, setActiveTab, theme, isDarkMode, t } = useApp();
+    const { cart, updateCartQuantity, removeFromCart, placeOrder, setActiveTab, theme, isDarkMode, t, restaurants } = useApp();
+    const [tempProof, setTempProof] = useState(null);
+    const [finalProof, setFinalProof] = useState(null);
+
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const deliveryFee = 25; // Adjusted to Rs for Mauritius
-    const serviceFee = 15; // Adjusted to Rs for Mauritius
+    const deliveryFee = 25;
+    const serviceFee = 15;
     const total = subtotal + (cart.length > 0 ? (deliveryFee + serviceFee) : 0);
 
+    // Get the restaurant for bank details
+    const restaurantId = cart[0]?.restaurantId;
+    const currentRestaurant = restaurants.find(r => r.id === restaurantId);
+    const bankDetails = currentRestaurant?.bankDetails || { bank: 'MCB', account: '000445566778', name: 'QuickBite Ltd', juice: '57778888' };
+
     const handleCheckout = () => {
-        placeOrder();
-        Alert.alert(t('success') || "Success!", t('order_placed') || "Your order has been placed.", [
-            { text: t('track_order') || "Track Order", onPress: () => setActiveTab('Map') },
+        if (!finalProof) {
+            Alert.alert("Payment Proof Required", "Please upload and INSERT a screenshot of your internet banking transfer to place the order.");
+            return;
+        }
+        placeOrder(finalProof);
+        Alert.alert("Success!", "Your order has been placed and is awaiting validation. We will verify your payment proof shortly.", [
+            { text: "View Order", onPress: () => setActiveTab('Orders') },
             { text: "OK", onPress: () => setActiveTab('Home') }
         ]);
+    };
+
+    const pickProof = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'We need access to your gallery to upload the payment proof.');
+            return;
+        }
+
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: 'images',
+            allowsEditing: true, // This enables the "Crop" button in the OS picker
+            aspect: [4, 3],
+            quality: 1,
+        });
+
+        if (!result.canceled) {
+            setTempProof(result.assets[0].uri);
+            // User now needs to click "INSERT" to confirm the cropped image
+        }
+    };
+
+    const confirmInsert = () => {
+        setFinalProof(tempProof);
+        setTempProof(null);
+        Alert.alert("Success", "Payment proof inserted successfully!");
     };
 
     if (cart.length === 0) {
@@ -38,8 +75,8 @@ export default function CartScreen({ navigation }) {
     return (
         <View style={[styles.container, { backgroundColor: isDarkMode ? '#111827' : '#F9FAFB' }]}>
             <View style={[styles.header, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-                    <Ionicons name="close" size={24} color={isDarkMode ? '#FFFFFF' : '#1F2937'} />
+                <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.closeBtn}>
+                    <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#FFFFFF' : '#1F2937'} />
                 </TouchableOpacity>
                 <Text style={[styles.headerTitle, { color: isDarkMode ? '#FFFFFF' : '#1F2937' }]}>{cart[0]?.restaurantName || t('my_basket')}</Text>
                 <View style={{ width: 44 }} />
@@ -77,7 +114,68 @@ export default function CartScreen({ navigation }) {
                 )}
                 ListFooterComponent={() => (
                     <View style={styles.footer}>
-                        <Text style={[styles.summaryTitle, { color: isDarkMode ? '#FFFFFF' : '#1F2937' }]}>{t('payment_summary')}</Text>
+                        <Text style={[styles.summaryTitle, { color: isDarkMode ? '#FFFFFF' : '#1F2937' }]}>Payment Details</Text>
+
+                        <View style={[styles.paymentMethodBox, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}>
+                            <View style={styles.paymentMethodHeader}>
+                                <Ionicons name="business" size={24} color={theme.colors.primary} />
+                                <Text style={[styles.paymentMethodTitle, { color: isDarkMode ? '#FFFFFF' : '#1F2937' }]}>Internet Banking ({bankDetails.bank})</Text>
+                            </View>
+
+                            <View style={styles.bankDetailRow}>
+                                <Text style={styles.bankLabel}>A/C Name:</Text>
+                                <Text style={[styles.bankValue, { color: isDarkMode ? '#fff' : '#000' }]}>{bankDetails.name}</Text>
+                            </View>
+                            <View style={styles.bankDetailRow}>
+                                <Text style={styles.bankLabel}>A/C Number:</Text>
+                                <Text style={[styles.bankValue, { color: theme.colors.primary, fontWeight: '900' }]}>{bankDetails.account}</Text>
+                            </View>
+                            {bankDetails.juice && (
+                                <View style={styles.bankDetailRow}>
+                                    <Text style={styles.bankLabel}>Juice No:</Text>
+                                    <Text style={[styles.bankValue, { color: '#10B981', fontWeight: '900' }]}>{bankDetails.juice}</Text>
+                                </View>
+                            )}
+
+                            <Text style={styles.paymentMethodDesc}>1. Open your banking app.{"\n"}2. Transfer Rs {total.toFixed(2)}.{"\n"}3. Take a screenshot & INSERT it below.</Text>
+
+                            <View style={styles.uploadContainer}>
+                                <TouchableOpacity
+                                    style={[styles.uploadBox, { borderColor: (finalProof || tempProof) ? '#10B981' : theme.colors.primary }]}
+                                    onPress={pickProof}
+                                >
+                                    {(tempProof || finalProof) ? (
+                                        <View style={styles.proofSelected}>
+                                            <Image source={{ uri: tempProof || finalProof }} style={styles.proofThumb} />
+                                            <Text style={[styles.uploadText, { color: '#10B981' }]}>
+                                                {tempProof ? "Photo Selected" : "Photo Inserted"}
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.proofSelected}>
+                                            <Ionicons name="crop" size={24} color={theme.colors.primary} />
+                                            <Text style={[styles.uploadText, { color: theme.colors.primary }]}>Select & Crop Photo</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+
+                                {tempProof && (
+                                    <TouchableOpacity style={styles.insertBtn} onPress={confirmInsert}>
+                                        <Text style={styles.insertBtnText}>INSERT PHOTO</Text>
+                                        <Ionicons name="cloud-upload" size={18} color="#fff" />
+                                    </TouchableOpacity>
+                                )}
+
+                                {finalProof && (
+                                    <View style={styles.insertedBadge}>
+                                        <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                                        <Text style={styles.insertedBadgeText}>INSERTED</Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
+
+                        <Text style={[styles.summaryTitle, { color: isDarkMode ? '#FFFFFF' : '#1F2937', marginTop: 20 }]}>{t('payment_summary')}</Text>
                         <View style={styles.row}>
                             <Text style={[styles.label, { color: isDarkMode ? '#9CA3AF' : '#6B7280' }]}>{t('subtotal')}</Text>
                             <Text style={[styles.value, { color: isDarkMode ? '#FFFFFF' : '#1F2937' }]}>Rs {subtotal.toFixed(2)}</Text>
@@ -99,8 +197,11 @@ export default function CartScreen({ navigation }) {
             />
 
             <View style={[styles.checkoutContainer, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}>
-                <TouchableOpacity style={[styles.checkoutBtn, { backgroundColor: theme.colors.primary }]} onPress={handleCheckout}>
-                    <Text style={styles.checkoutBtnText}>{t('next_checkout')}</Text>
+                <TouchableOpacity
+                    style={[styles.checkoutBtn, { backgroundColor: finalProof ? theme.colors.primary : '#9CA3AF' }]}
+                    onPress={handleCheckout}
+                >
+                    <Text style={styles.checkoutBtnText}>Place Order</Text>
                     <View style={styles.checkoutPriceBadge}>
                         <Text style={styles.checkoutPriceText}>Rs {total.toFixed(2)}</Text>
                     </View>
@@ -111,9 +212,7 @@ export default function CartScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
         paddingTop: Platform.OS === 'ios' ? 60 : 40,
         paddingBottom: 20,
@@ -126,169 +225,80 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
     },
-    closeBtn: {
-        width: 44,
-        height: 44,
-        justifyContent: 'center',
+    closeBtn: { width: 44, height: 44, justifyContent: 'center' },
+    headerTitle: { fontSize: 18, fontWeight: '900' },
+    listHeader: { paddingHorizontal: 20, paddingVertical: 10 },
+    instructionBox: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1 },
+    instructionText: { marginLeft: 10, fontWeight: 'bold', fontSize: 15 },
+    cartItem: { flexDirection: 'row', padding: 20, alignItems: 'center', borderBottomWidth: 1 },
+    qtySelector: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 20, paddingHorizontal: 5 },
+    qtyActionBtn: { padding: 8 },
+    qtyText: { fontSize: 15, fontWeight: '900', marginHorizontal: 10, minWidth: 15, textAlign: 'center' },
+    image: { width: 70, height: 70, borderRadius: 8 },
+    details: { flex: 1, marginHorizontal: 15 },
+    name: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+    price: { fontSize: 14 },
+    footer: { padding: 20, marginTop: 10 },
+    summaryTitle: { fontSize: 20, fontWeight: '900', marginBottom: 20 },
+    paymentMethodBox: {
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginBottom: 20,
     },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '900',
-    },
-    listHeader: {
-        paddingHorizontal: 20,
-        paddingVertical: 10
-    },
-    instructionBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 15,
-        borderBottomWidth: 1,
-    },
-    instructionText: {
-        marginLeft: 10,
-        fontWeight: 'bold',
-        fontSize: 15
-    },
-    cartItem: {
-        flexDirection: 'row',
-        padding: 20,
-        alignItems: 'center',
-        borderBottomWidth: 1,
-    },
-    qtySelector: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.05)',
-        borderRadius: 20,
-        paddingHorizontal: 5
-    },
-    qtyActionBtn: {
-        padding: 8
-    },
-    qtyText: {
-        fontSize: 15,
-        fontWeight: '900',
-        marginHorizontal: 10,
-        minWidth: 15,
-        textAlign: 'center'
-    },
-    image: {
-        width: 70,
-        height: 70,
-        borderRadius: 8,
-    },
-    details: {
-        flex: 1,
-        marginHorizontal: 15
-    },
-    name: {
-        fontSize: 16,
-        fontWeight: '700',
-        marginBottom: 4
-    },
-    price: {
-        fontSize: 14,
-    },
-    footer: {
-        padding: 20,
-        marginTop: 10
-    },
-    summaryTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        marginBottom: 20
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 15
-    },
-    label: {
-        fontSize: 15
-    },
-    value: {
-        fontSize: 15,
-        fontWeight: '600'
-    },
-    totalRow: {
-        marginTop: 10,
-        paddingTop: 15,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E5E5'
-    },
-    totalLabel: {
-        fontSize: 18,
-        fontWeight: '900',
-    },
-    totalValue: {
-        fontSize: 18,
-        fontWeight: '900',
-    },
-    checkoutContainer: {
-        padding: 20,
-        borderTopWidth: 1,
-        borderTopColor: '#E5E5E5'
-    },
-    checkoutBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 16,
+    paymentMethodHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+    paymentMethodTitle: { fontSize: 16, fontWeight: 'bold', marginLeft: 10 },
+    bankDetailRow: { flexDirection: 'row', marginBottom: 8, alignItems: 'center' },
+    bankLabel: { fontSize: 13, color: '#6B7280', width: 90 },
+    bankValue: { fontSize: 14, fontWeight: '600' },
+    paymentMethodDesc: { fontSize: 13, color: '#6B7280', marginVertical: 15, lineHeight: 20 },
+    uploadContainer: { marginTop: 5 },
+    uploadBox: {
+        borderWidth: 2,
+        borderStyle: 'dashed',
         borderRadius: 12,
-    },
-    checkoutBtnText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: '900',
-        flex: 1,
-        textAlign: 'center',
-        marginLeft: 40
-    },
-    checkoutPriceBadge: {
-        backgroundColor: 'rgba(0,0,0,0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-        marginRight: 10
-    },
-    checkoutPriceText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16
-    },
-    emptyContainer: {
-        flex: 1,
+        padding: 15,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 40
-    },
-    emptyIconContainer: {
-        marginBottom: 30
-    },
-    emptyTitle: {
-        fontSize: 22,
-        fontWeight: '900',
-        textAlign: 'center',
         marginBottom: 10
     },
-    emptySubtitle: {
-        fontSize: 15,
-        color: '#6B7280',
-        textAlign: 'center',
-        marginBottom: 40,
-        lineHeight: 22
+    proofSelected: { flexDirection: 'row', alignItems: 'center' },
+    proofThumb: { width: 40, height: 40, borderRadius: 4, marginRight: 10 },
+    uploadText: { fontSize: 14, fontWeight: 'bold', marginHorizontal: 10 },
+    insertBtn: {
+        backgroundColor: '#F59E0B',
+        padding: 12,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center'
     },
-    exploreBtn: {
-        paddingHorizontal: 30,
-        paddingVertical: 15,
-        borderRadius: 30,
-        elevation: 2
+    insertBtnText: { color: '#fff', fontWeight: 'bold', marginRight: 8 },
+    insertedBadge: {
+        backgroundColor: '#10B981',
+        padding: 8,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center'
     },
-    exploreText: {
-        color: '#fff',
-        fontWeight: '900',
-        fontSize: 16
-    }
+    insertedBadgeText: { color: '#fff', fontWeight: 'bold', marginLeft: 6, fontSize: 12 },
+    row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+    label: { fontSize: 15 },
+    value: { fontSize: 15, fontWeight: '600' },
+    totalRow: { marginTop: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#E5E5E5' },
+    totalLabel: { fontSize: 18, fontWeight: '900' },
+    totalValue: { fontSize: 18, fontWeight: '900' },
+    checkoutContainer: { padding: 20, borderTopWidth: 1, borderTopColor: '#E5E5E5' },
+    checkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12 },
+    checkoutBtnText: { color: '#fff', fontSize: 18, fontWeight: '900', flex: 1, textAlign: 'center', marginLeft: 40 },
+    checkoutPriceBadge: { backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginRight: 10 },
+    checkoutPriceText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+    emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+    emptyIconContainer: { marginBottom: 30 },
+    emptyTitle: { fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
+    emptySubtitle: { fontSize: 15, color: '#6B7280', textAlign: 'center', marginBottom: 40, lineHeight: 22 },
+    exploreBtn: { paddingHorizontal: 30, paddingVertical: 15, borderRadius: 30, elevation: 2 },
+    exploreText: { color: '#fff', fontWeight: '900', fontSize: 16 }
 });
-

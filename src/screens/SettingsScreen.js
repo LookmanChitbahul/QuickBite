@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 
 export default function SettingsScreen({ navigation }) {
-  const { theme, isDarkMode, settings, toggleSettings, toggleTheme, language, changeLanguage, t } = useApp();
+  const { user, theme, isDarkMode, colorBlindType, setColorBlindType, settings, toggleSettings, toggleTheme, language, changeLanguage, t } = useApp();
 
   // Safe color access
   const bgColor = theme?.colors?.background || '#F9FAFB';
@@ -56,7 +56,7 @@ export default function SettingsScreen({ navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <View style={[styles.header, { backgroundColor: cardColor, borderBottomColor: borderColor }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={textColor} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: textColor }]}>Settings</Text>
@@ -87,6 +87,24 @@ export default function SettingsScreen({ navigation }) {
             onToggle={() => toggleSettings('location')}
           />
           <SettingItem
+            icon="eye-outline"
+            title={t('color_blind_mode')}
+            value={colorBlindType === 'none' ? 'None' : colorBlindType.charAt(0).toUpperCase() + colorBlindType.slice(1)}
+            onPress={() => {
+              Alert.alert(
+                t('color_blind_mode'),
+                'Select your color vision type:',
+                [
+                  { text: 'None', onPress: () => setColorBlindType('none') },
+                  { text: 'Protanopia', onPress: () => setColorBlindType('protanopia') },
+                  { text: 'Deuteranopia', onPress: () => setColorBlindType('deuteranopia') },
+                  { text: 'Tritanopia', onPress: () => setColorBlindType('tritanopia') },
+                  { text: 'Cancel', style: 'cancel' }
+                ]
+              );
+            }}
+          />
+          <SettingItem
             icon="globe-outline"
             title={t('language')}
             value={language === 'en' ? 'English' : 'Français'}
@@ -110,6 +128,13 @@ export default function SettingsScreen({ navigation }) {
             title="Edit Profile"
             onPress={() => navigation.navigate('EditProfile')}
           />
+          {user?.isOwner && (
+            <SettingItem
+              icon="business-outline"
+              title={t('owner_dashboard')}
+              onPress={() => navigation.navigate('OwnerDashboard')}
+            />
+          )}
           <SettingItem
             icon="card-outline"
             title={t('payment_methods')}

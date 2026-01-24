@@ -16,7 +16,7 @@ Notifications.setNotificationHandler({
     }),
 });
 */
-import { lightTheme, darkTheme } from '../styles/theme';
+import { lightTheme, darkTheme, colorBlindLightTheme, colorBlindDarkTheme } from '../styles/theme';
 
 
 const AppContext = createContext();
@@ -35,15 +35,27 @@ export const AppProvider = ({ children }) => {
     // Theme & Settings State
     const systemScheme = useColorScheme();
     const [isDarkMode, setIsDarkMode] = useState(systemScheme === 'dark');
-    const [theme, setTheme] = useState(systemScheme === 'dark' ? darkTheme : lightTheme);
+    const [colorBlindType, setColorBlindType] = useState('none');
+    const [theme, setTheme] = useState(lightTheme);
+
     const [settings, setSettings] = useState({
         notifications: true,
         location: true,
     });
     const [activeTab, setActiveTab] = useState('Home');
 
+    useEffect(() => {
+        if (colorBlindType !== 'none') {
+            setTheme(isDarkMode ? colorBlindDarkTheme : colorBlindLightTheme);
+        } else {
+            setTheme(isDarkMode ? darkTheme : lightTheme);
+        }
+    }, [isDarkMode, colorBlindType]);
+
+    const toggleColorBlind = () => setColorBlindType(prev => prev === 'none' ? 'deuteranopia' : 'none');
+
     const [paymentMethods, setPaymentMethods] = useState([
-        { id: '1', type: 'Visa', last4: '4242', icon: 'card' }
+        { id: '1', type: 'Internet Banking', last4: 'Transfer', icon: 'business' }
     ]);
 
     const [language, setLanguage] = useState('en');
@@ -65,9 +77,7 @@ export const AppProvider = ({ children }) => {
         await AsyncStorage.setItem('userLanguage', newLang);
     };
 
-    useEffect(() => {
-        setTheme(isDarkMode ? darkTheme : lightTheme);
-    }, [isDarkMode]);
+
 
     useEffect(() => {
         setIsDarkMode(systemScheme === 'dark');
@@ -77,10 +87,17 @@ export const AppProvider = ({ children }) => {
     useEffect(() => {
         const loadStorageData = async () => {
             try {
-                // Force reset for fresh start as requested by user
-                await AsyncStorage.removeItem('hasSeenWelcome');
-                await AsyncStorage.removeItem('userSession');
+                // Load existing orders history
+                const savedOrders = await AsyncStorage.getItem('orderHistory');
+                if (savedOrders) {
+                    setOrders(JSON.parse(savedOrders));
+                }
 
+                // Force reset for fresh start as requested by user for session
+                // await AsyncStorage.removeItem('hasSeenWelcome');
+                // await AsyncStorage.removeItem('userSession');
+
+                // For testing purposes, we'll keep the session reset but allow order history to stay if it exists
                 setHasSeenWelcome(false);
                 setUser(null);
             } catch (e) {
@@ -91,6 +108,20 @@ export const AppProvider = ({ children }) => {
         };
         loadStorageData();
     }, []);
+
+    // Save orders whenever they change
+    useEffect(() => {
+        const saveOrders = async () => {
+            try {
+                await AsyncStorage.setItem('orderHistory', JSON.stringify(orders));
+            } catch (e) {
+                console.error("Failed to save orders", e);
+            }
+        };
+        if (orders.length > 0) {
+            saveOrders();
+        }
+    }, [orders]);
 
     const completeOnboarding = async () => {
         try {
@@ -149,14 +180,24 @@ export const AppProvider = ({ children }) => {
     };
 
     const scheduleNotification = async (title, body) => {
-        await Notifications.scheduleNotificationAsync({
-            content: {
-                title: title,
-                body: body,
-                data: { data: 'goes here' },
-            },
-            trigger: null, // show immediately
-        });
+        try {
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== 'granted') {
+                const { status: newStatus } = await Notifications.requestPermissionsAsync();
+                if (newStatus !== 'granted') return;
+            }
+
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: title,
+                    body: body,
+                    data: { data: 'goes here' },
+                },
+                trigger: null, // show immediately
+            });
+        } catch (e) {
+            console.log("Notifications not supported in this environment:", e.message);
+        }
     };
 
     // --- User Actions ---
@@ -223,7 +264,7 @@ export const AppProvider = ({ children }) => {
     const clearCart = () => setCart([]);
 
     // --- Order Actions ---
-    const placeOrder = () => {
+    const placeOrder = (paymentProof = null) => {
         if (cart.length === 0) return;
 
         const firstItem = cart[0];
@@ -232,12 +273,13 @@ export const AppProvider = ({ children }) => {
         const newOrder = {
             id: Date.now().toString(),
             items: [...cart],
-            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 40, // subtotal + fees
             date: new Date().toISOString(),
-            status: 'Preparing', // Preparing, On the Way, Delivered
+            status: 'Awaiting Validation', // Modified to reflect manual proof check
             restaurantId: firstItem.restaurantId,
             restaurantName: firstItem.restaurantName || 'Restaurant',
-            location: restaurant?.location || restaurantLocation
+            location: restaurant?.location || restaurantLocation,
+            paymentProof: paymentProof
         };
 
         setOrders((prevOrders) => [newOrder, ...prevOrders]);
@@ -249,6 +291,22 @@ export const AppProvider = ({ children }) => {
         setRestaurants((prevRestaurants) =>
             prevRestaurants.map((rest) =>
                 rest.id === restaurantId ? { ...rest, menu: updatedMenu } : rest
+            )
+        );
+    };
+
+    const addRestaurant = (newRestaurant) => {
+        setRestaurants(prev => [...prev, newRestaurant]);
+    };
+
+    const deleteRestaurant = (restaurantId) => {
+        setRestaurants(prev => prev.filter(r => r.id !== restaurantId));
+    };
+
+    const updateOrderStatus = (orderId, newStatus) => {
+        setOrders(prevOrders =>
+            prevOrders.map(order =>
+                order.id === orderId ? { ...order, status: newStatus } : order
             )
         );
     };
@@ -277,6 +335,9 @@ export const AppProvider = ({ children }) => {
                 theme,
                 isDarkMode,
                 toggleTheme,
+                colorBlindType,
+                setColorBlindType,
+                toggleColorBlind,
                 settings,
                 toggleSettings,
                 paymentMethods,
@@ -290,7 +351,10 @@ export const AppProvider = ({ children }) => {
                 setRestaurantLocation,
                 language,
                 changeLanguage,
-                t
+                t,
+                updateOrderStatus,
+                addRestaurant,
+                deleteRestaurant
             }}
         >
             {children}
