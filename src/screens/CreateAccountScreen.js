@@ -4,12 +4,97 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
+import { auth, db } from '../lib/firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { Alert, ActivityIndicator } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function CreateAccountScreen({ navigation }) {
     const [agree, setAgree] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
-    const { login, isDarkMode, theme } = useApp();
+    const [fullName, setFullName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const { isDarkMode, theme, setUser } = useApp();
+
+    const handleSignUp = async () => {
+        if (!fullName || !phone || !email || !password || !confirmPassword) {
+            Alert.alert("Error", "Please fill in all fields");
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            Alert.alert("Error", "Passwords do not match");
+            return;
+        }
+
+        if (!agree) {
+            Alert.alert("Error", "You must agree to the terms and conditions");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // Save additional user info to Firestore
+            await setDoc(doc(db, 'users', user.uid), {
+                name: fullName, // Map to name for consistency with profile
+                phone,
+                email,
+                role: 'user',
+                createdAt: new Date().toISOString()
+            });
+
+            // Navigation will be handled by AppContext state change
+        } catch (error) {
+            Alert.alert("Registration Failed", error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleSignUp = async () => {
+        setLoading(true);
+        try {
+            // Simulated Browser-based Google Sign-Up Pop-up
+            const result = await WebBrowser.openAuthSessionAsync(
+                'https://accounts.google.com/o/oauth2/v2/auth?client_id=demo&response_type=token&scope=email%20profile&redirect_uri=' +
+                AuthSession.makeRedirectUri(),
+                'quickbite'
+            );
+
+            if (result.type === 'success') {
+                setTimeout(() => {
+                    const mockGoogleUser = {
+                        uid: 'google-mock-' + Math.random().toString(36).substr(2, 9),
+                        name: 'New Google User',
+                        email: 'user' + Math.floor(Math.random() * 1000) + '@gmail.com',
+                        photoUrl: 'https://i.pravatar.cc/150?u=google',
+                        isOwner: false,
+                        role: 'user'
+                    };
+                    setUser(mockGoogleUser);
+                    setLoading(false);
+                }, 800);
+            } else {
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Google Sign Up Error:", error);
+            setLoading(false);
+        }
+    };
 
     // Animation Values
     const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -129,6 +214,8 @@ export default function CreateAccountScreen({ navigation }) {
                                     style={[styles.input, { color: theme.colors.text }]}
                                     placeholder="Enter your full name"
                                     placeholderTextColor={theme.colors.muted}
+                                    value={fullName}
+                                    onChangeText={setFullName}
                                 />
                             </View>
                         </View>
@@ -142,6 +229,8 @@ export default function CreateAccountScreen({ navigation }) {
                                     placeholder="Enter your phone number"
                                     placeholderTextColor={theme.colors.muted}
                                     keyboardType="phone-pad"
+                                    value={phone}
+                                    onChangeText={setPhone}
                                 />
                             </View>
                         </View>
@@ -155,6 +244,9 @@ export default function CreateAccountScreen({ navigation }) {
                                     placeholder="Enter your email"
                                     placeholderTextColor={theme.colors.muted}
                                     keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    value={email}
+                                    onChangeText={setEmail}
                                 />
                             </View>
                         </View>
@@ -168,6 +260,8 @@ export default function CreateAccountScreen({ navigation }) {
                                     placeholder="Create a password"
                                     placeholderTextColor={theme.colors.muted}
                                     secureTextEntry={!isPasswordVisible}
+                                    value={password}
+                                    onChangeText={setPassword}
                                 />
                                 <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
                                     <Ionicons
@@ -188,6 +282,8 @@ export default function CreateAccountScreen({ navigation }) {
                                     placeholder="Confirm your password"
                                     placeholderTextColor={theme.colors.muted}
                                     secureTextEntry={!isConfirmPasswordVisible}
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
                                 />
                                 <TouchableOpacity onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}>
                                     <Ionicons
@@ -212,12 +308,16 @@ export default function CreateAccountScreen({ navigation }) {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.signUpBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }, !agree && styles.disabledBtn]}
-                            onPress={() => login({ name: "User", email: "user@example.com" })}
-                            disabled={!agree}
+                            style={[styles.signUpBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }, (!agree || loading) && styles.disabledBtn]}
+                            onPress={handleSignUp}
+                            disabled={!agree || loading}
                             activeOpacity={0.8}
                         >
-                            <Text style={styles.signUpText}>Create Account</Text>
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.signUpText}>Create Account</Text>
+                            )}
                         </TouchableOpacity>
 
                         <View style={styles.dividerRow}>
@@ -227,19 +327,40 @@ export default function CreateAccountScreen({ navigation }) {
                         </View>
 
                         <View style={styles.socialRow}>
-                            <TouchableOpacity style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderColor: isDarkMode ? '#374151' : '#E5E7EB' }]}>
-                                <Image
-                                    source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }}
-                                    style={{ width: 28, height: 28 }}
-                                    resizeMode="contain"
-                                />
+                            <TouchableOpacity
+                                style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderColor: isDarkMode ? '#374151' : '#E5E7EB', width: '48%' }]}
+                                onPress={handleGoogleSignUp}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Image
+                                        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }}
+                                        style={{ width: 22, height: 22, marginRight: 8 }}
+                                        resizeMode="contain"
+                                    />
+                                    <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>Google</Text>
+                                </View>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderColor: isDarkMode ? '#374151' : '#E5E7EB' }]}>
-                                <Image
-                                    source={{ uri: 'https://cdn-icons-png.flaticon.com/512/12183/12183827.png' }}
-                                    style={{ width: 28, height: 28, tintColor: isDarkMode ? '#fff' : undefined }}
-                                    resizeMode="contain"
-                                />
+
+                            <TouchableOpacity
+                                style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#000' : '#000', borderColor: isDarkMode ? '#374151' : '#000', width: '48%' }]}
+                                onPress={() => {
+                                    setLoading(true);
+                                    setTimeout(() => {
+                                        setUser({
+                                            uid: 'apple-mock-id',
+                                            name: 'Apple User',
+                                            email: 'appleuser@icloud.com',
+                                            isOwner: false,
+                                            role: 'user'
+                                        });
+                                        setLoading(false);
+                                    }, 1000);
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="logo-apple" size={22} color="#fff" style={{ marginRight: 8 }} />
+                                    <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Apple</Text>
+                                </View>
                             </TouchableOpacity>
                         </View>
 

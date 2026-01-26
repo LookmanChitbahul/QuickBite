@@ -3,17 +3,90 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Animat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'react-native';
+import { Image, Alert, ActivityIndicator } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { auth } from '../lib/firebase';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
+import * as Crypto from 'expo-crypto';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen({ navigation }) {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
-    const { login, isDarkMode, theme } = useApp();
+    const { isDarkMode, theme, forgotPassword, setUser } = useApp();
 
-    const handleSignIn = () => {
-        login({ name: "Demo User", email: "demo@example.com" });
+    const handleSignIn = async () => {
+        if (!email || !password) {
+            Alert.alert("Error", "Please enter Both email and password");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            Alert.alert("Login Failed", error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleForgotPassword = async () => {
+        if (!email) {
+            Alert.alert("Error", "Please enter your email address first");
+            return;
+        }
+        setLoading(true);
+        const result = await forgotPassword(email);
+        setLoading(false);
+        if (result.success) {
+            Alert.alert("Success", "Password reset email sent!");
+        } else {
+            Alert.alert("Error", result.error);
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        setLoading(true);
+        try {
+            // Simulated Browser-based Google Sign-In Pop-up
+            // In a real production app, you would use a real Google Auth URL.
+            // For this demo, we use a beautiful simulated auth page.
+            const result = await WebBrowser.openAuthSessionAsync(
+                'https://accounts.google.com/o/oauth2/v2/auth?client_id=demo&response_type=token&scope=email%20profile&redirect_uri=' +
+                AuthSession.makeRedirectUri(),
+                'quickbite'
+            );
+
+            if (result.type === 'success') {
+                // Simulate account selection logic
+                setTimeout(() => {
+                    const mockGoogleUser = {
+                        uid: 'google-mock-' + Math.random().toString(36).substr(2, 9),
+                        name: 'Google User', // User requested the name matches
+                        email: 'user' + Math.floor(Math.random() * 1000) + '@gmail.com',
+                        photoUrl: 'https://i.pravatar.cc/150?u=google',
+                        isOwner: false,
+                        role: 'user'
+                    };
+                    setUser(mockGoogleUser);
+                    setLoading(false);
+                }, 800);
+            } else {
+                // If dismissed or canceled, just turn off loading and don't redirect
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Google Sign In Error:", error);
+            setLoading(false);
+        }
     };
 
     return (
@@ -50,8 +123,12 @@ export default function SignInScreen({ navigation }) {
                                         <Ionicons name="mail-outline" size={20} color={theme.colors.muted} style={styles.inputIcon} />
                                         <TextInput
                                             style={[styles.input, { color: theme.colors.text }]}
-                                            placeholder="Enter your email or phone"
+                                            placeholder="Enter your email"
                                             placeholderTextColor={theme.colors.muted}
+                                            value={email}
+                                            onChangeText={setEmail}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
                                         />
                                     </View>
                                 </View>
@@ -64,6 +141,8 @@ export default function SignInScreen({ navigation }) {
                                             placeholder="Enter your password"
                                             placeholderTextColor={theme.colors.muted}
                                             secureTextEntry={!isPasswordVisible}
+                                            value={password}
+                                            onChangeText={setPassword}
                                         />
                                         <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
                                             <Ionicons
@@ -85,7 +164,7 @@ export default function SignInScreen({ navigation }) {
                                         </View>
                                         <Text style={[styles.checkboxLabel, { color: theme.colors.textLight }]}>Remember me</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity>
+                                    <TouchableOpacity onPress={handleForgotPassword}>
                                         <Text style={[styles.forgotText, { color: theme.colors.primary }]}>Forgot password?</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -94,8 +173,13 @@ export default function SignInScreen({ navigation }) {
                                     style={[styles.signInBtn, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}
                                     onPress={handleSignIn}
                                     activeOpacity={0.8}
+                                    disabled={loading}
                                 >
-                                    <Text style={styles.signInText}>Sign In</Text>
+                                    {loading ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={styles.signInText}>Sign In</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
 
@@ -105,19 +189,40 @@ export default function SignInScreen({ navigation }) {
                                 <View style={[styles.divider, { backgroundColor: isDarkMode ? '#374151' : '#E5E7EB' }]} />
                             </View>
                             <View style={styles.socialRow}>
-                                <TouchableOpacity style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderColor: isDarkMode ? '#374151' : '#E5E7EB' }]}>
-                                    <Image
-                                        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }}
-                                        style={{ width: 28, height: 28 }}
-                                        resizeMode="contain"
-                                    />
+                                <TouchableOpacity
+                                    style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderColor: isDarkMode ? '#374151' : '#E5E7EB', width: '48%' }]}
+                                    onPress={handleGoogleSignIn}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Image
+                                            source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }}
+                                            style={{ width: 22, height: 22, marginRight: 8 }}
+                                            resizeMode="contain"
+                                        />
+                                        <Text style={{ color: theme.colors.text, fontWeight: '600', fontSize: 13 }}>Google</Text>
+                                    </View>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#fff', borderColor: isDarkMode ? '#374151' : '#E5E7EB' }]}>
-                                    <Image
-                                        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/12183/12183827.png' }}
-                                        style={{ width: 28, height: 28, tintColor: isDarkMode ? '#fff' : undefined }}
-                                        resizeMode="contain"
-                                    />
+
+                                <TouchableOpacity
+                                    style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#000' : '#000', borderColor: isDarkMode ? '#374151' : '#000', width: '48%' }]}
+                                    onPress={() => {
+                                        setLoading(true);
+                                        setTimeout(() => {
+                                            setUser({
+                                                uid: 'apple-mock-id',
+                                                name: 'Apple User',
+                                                email: 'appleuser@icloud.com',
+                                                isOwner: false,
+                                                role: 'user'
+                                            });
+                                            setLoading(false);
+                                        }, 1000);
+                                    }}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="logo-apple" size={22} color="#fff" style={{ marginRight: 8 }} />
+                                        <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Apple</Text>
+                                    </View>
                                 </TouchableOpacity>
                             </View>
 

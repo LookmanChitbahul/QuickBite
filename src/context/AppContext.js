@@ -5,6 +5,9 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { restaurants as initialRestaurants, userProfile, ownerProfile } from '../data/mockData';
 import { translations } from '../data/translations';
+import { auth, db } from '../lib/firebase';
+import { onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Remote Push Notifications are not supported in Expo Go for SDK 54+
 /*
@@ -83,30 +86,70 @@ export const AppProvider = ({ children }) => {
         setIsDarkMode(systemScheme === 'dark');
     }, [systemScheme]);
 
-    // Check Storage on Mount
+    // Check Firebase Auth & Storage on Mount
     useEffect(() => {
-        const loadStorageData = async () => {
+        const loadOrders = async () => {
             try {
-                // Load existing orders history
                 const savedOrders = await AsyncStorage.getItem('orderHistory');
-                if (savedOrders) {
-                    setOrders(JSON.parse(savedOrders));
-                }
+                if (savedOrders) setOrders(JSON.parse(savedOrders));
 
-                // Force reset for fresh start as requested by user for session
-                // await AsyncStorage.removeItem('hasSeenWelcome');
-                // await AsyncStorage.removeItem('userSession');
-
-                // For testing purposes, we'll keep the session reset but allow order history to stay if it exists
-                setHasSeenWelcome(false);
-                setUser(null);
+                const seenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
+                if (seenWelcome) setHasSeenWelcome(true);
             } catch (e) {
                 console.error("Failed to load storage data", e);
-            } finally {
-                setIsLoading(false);
             }
         };
-        loadStorageData();
+        loadOrders();
+
+        // Safety timeout for loading state
+        const loadingTimeout = setTimeout(() => {
+            setIsLoading(false);
+        }, 5000); // 5 seconds max loading
+
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            try {
+                if (firebaseUser) {
+                    let userData = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email,
+                        name: firebaseUser.displayName, // Map standard Firebase property
+                    };
+
+                    try {
+                        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+                        if (userDoc.exists()) {
+                            userData = { ...userData, ...userDoc.data() };
+                        }
+                    } catch (permError) {
+                        console.warn("Firestore Access Warning: " + permError.message + ". Check your Firestore Rules.");
+                        // We continue with basic auth data if Firestore is locked
+                    }
+
+                    // Owner Detection Logic
+                    const isOwner = userData.email === 'owner@gmail.com' || userData.role === 'owner';
+
+                    const finalUser = {
+                        ...userProfile,
+                        ...userData,
+                        isOwner: isOwner
+                    };
+
+                    setUser(finalUser);
+                } else {
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error("Firebase Auth state error:", error);
+            } finally {
+                setIsLoading(false);
+                clearTimeout(loadingTimeout);
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            clearTimeout(loadingTimeout);
+        };
     }, []);
 
     // Save orders whenever they change
@@ -132,23 +175,28 @@ export const AppProvider = ({ children }) => {
         }
     };
 
-    const login = async (userData) => {
-        try {
-            // Simulator login: just set state and storage
-            const newUser = { ...userProfile, ...userData }; // Merge with mock profile for now
-            setUser(newUser);
-            await AsyncStorage.setItem('userSession', JSON.stringify(newUser));
-        } catch (e) {
-            console.error("Login failed");
-        }
+    const login = async (email, password, rememberMe = false) => {
+        // Handled in screen
     };
 
     const logout = async () => {
         try {
+            await signOut(auth);
             setUser(null);
+            setHasSeenWelcome(false);
             await AsyncStorage.removeItem('userSession');
+            await AsyncStorage.removeItem('hasSeenWelcome');
         } catch (e) {
-            console.error("Logout failed");
+            console.error("Logout failed", e);
+        }
+    };
+
+    const forgotPassword = async (email) => {
+        try {
+            await sendPasswordResetEmail(auth, email);
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
         }
     };
 
@@ -180,24 +228,16 @@ export const AppProvider = ({ children }) => {
     };
 
     const scheduleNotification = async (title, body) => {
+        // Disabled for Expo Go compatibility to avoid console errors
+        console.log("Notification suppressed (Expo Go SDK 53+ limit)");
+        /*
         try {
             const { status } = await Notifications.getPermissionsAsync();
-            if (status !== 'granted') {
-                const { status: newStatus } = await Notifications.requestPermissionsAsync();
-                if (newStatus !== 'granted') return;
-            }
-
-            await Notifications.scheduleNotificationAsync({
-                content: {
-                    title: title,
-                    body: body,
-                    data: { data: 'goes here' },
-                },
-                trigger: null, // show immediately
-            });
+            ...
         } catch (e) {
-            console.log("Notifications not supported in this environment:", e.message);
+            ...
         }
+        */
     };
 
     // --- User Actions ---
@@ -273,12 +313,13 @@ export const AppProvider = ({ children }) => {
         const newOrder = {
             id: Date.now().toString(),
             items: [...cart],
-            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) + 40, // subtotal + fees
+            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
             date: new Date().toISOString(),
-            status: 'Awaiting Validation', // Modified to reflect manual proof check
+            status: 'Awaiting Validation',
             restaurantId: firstItem.restaurantId,
             restaurantName: firstItem.restaurantName || 'Restaurant',
             location: restaurant?.location || restaurantLocation,
+            restaurantAddress: restaurant?.address || 'Restaurant Address',
             paymentProof: paymentProof
         };
 
@@ -354,7 +395,8 @@ export const AppProvider = ({ children }) => {
                 t,
                 updateOrderStatus,
                 addRestaurant,
-                deleteRestaurant
+                deleteRestaurant,
+                forgotPassword
             }}
         >
             {children}

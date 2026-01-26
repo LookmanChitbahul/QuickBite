@@ -121,21 +121,23 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Direct Owner Dashboard Link (for dev/current use) */}
-          <TouchableOpacity
-            style={[styles.ownerAccessBtn, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)', borderColor: primaryColor }]}
-            onPress={() => navigation.navigate('OwnerDashboard')}
-          >
-            <LinearGradient
-              colors={isDarkMode ? ['rgba(245,158,11,0.2)', 'rgba(245,158,11,0.05)'] : ['rgba(245,158,11,0.1)', 'rgba(245,158,11,0.02)']}
-              style={styles.ownerBtnGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-            <Ionicons name="speedometer-outline" size={20} color={primaryColor} />
-            <Text style={[styles.ownerAccessText, { color: textColor }]}>Open Owner Dashboard</Text>
-            <Ionicons name="arrow-forward" size={18} color={primaryColor} />
-          </TouchableOpacity>
+          {/* Direct Owner Dashboard Link (only for owners) */}
+          {user.isOwner && (
+            <TouchableOpacity
+              style={[styles.ownerAccessBtn, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)', borderColor: primaryColor }]}
+              onPress={() => navigation.navigate('OwnerDashboard')}
+            >
+              <LinearGradient
+                colors={isDarkMode ? ['rgba(245,158,11,0.2)', 'rgba(245,158,11,0.05)'] : ['rgba(245,158,11,0.1)', 'rgba(245,158,11,0.02)']}
+                style={styles.ownerBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
+              <Ionicons name="speedometer-outline" size={20} color={primaryColor} />
+              <Text style={[styles.ownerAccessText, { color: textColor }]}>Open Owner Dashboard</Text>
+              <Ionicons name="arrow-forward" size={18} color={primaryColor} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

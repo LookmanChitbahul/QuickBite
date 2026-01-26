@@ -346,7 +346,7 @@ export default function HomeScreen({ navigation }) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.headerIconBtn, { backgroundColor: isDarkMode ? theme.colors.card : '#fff', marginLeft: 10 }]}
-                onPress={() => navigation.navigate('Profile')}
+                onPress={() => setActiveTab('Profile')}
               >
                 <Ionicons name="person-outline" size={22} color={theme.colors.text} />
               </TouchableOpacity>
