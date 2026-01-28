@@ -7,6 +7,7 @@ import { Image, Alert, ActivityIndicator } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { auth } from '../lib/firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as Crypto from 'expo-crypto';
@@ -19,8 +20,10 @@ export default function SignInScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [isAccountPickerVisible, setIsAccountPickerVisible] = useState(false);
+    const [pickerType, setPickerType] = useState('Google');
 
-    const { isDarkMode, theme, forgotPassword, setUser } = useApp();
+    const { isDarkMode, theme, forgotPassword, setUser, savedAccounts, checkUserInDatabase, saveAccountToHistory } = useApp();
 
     const handleSignIn = async () => {
         if (!email || !password) {
@@ -30,6 +33,9 @@ export default function SignInScreen({ navigation }) {
 
         setLoading(true);
         try {
+            // Set Remember Me preference before signing in
+            await AsyncStorage.setItem('rememberMe', rememberMe ? 'true' : 'false');
+            await AsyncStorage.setItem('lastLoginTime', new Date().getTime().toString());
             await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
             Alert.alert("Login Failed", error.message);
@@ -47,44 +53,67 @@ export default function SignInScreen({ navigation }) {
         const result = await forgotPassword(email);
         setLoading(false);
         if (result.success) {
-            Alert.alert("Success", "Password reset email sent!");
+            Alert.alert(
+                "Email Sent",
+                "A password reset link has been sent. After clicking it in your email, you will receive a code. Would you like to enter the reset code now?",
+                [
+                    { text: "Later", style: "cancel" },
+                    { text: "Enter Code", onPress: () => navigation.navigate('ResetPassword', { email }) }
+                ]
+            );
         } else {
             Alert.alert("Error", result.error);
         }
     };
 
-    const handleGoogleSignIn = async () => {
-        setLoading(true);
-        try {
-            // Simulated Browser-based Google Sign-In Pop-up
-            // In a real production app, you would use a real Google Auth URL.
-            // For this demo, we use a beautiful simulated auth page.
-            const result = await WebBrowser.openAuthSessionAsync(
-                'https://accounts.google.com/o/oauth2/v2/auth?client_id=demo&response_type=token&scope=email%20profile&redirect_uri=' +
-                AuthSession.makeRedirectUri(),
-                'quickbite'
-            );
+    const handleGoogleSignIn = () => {
+        setPickerType('Google');
+        setIsAccountPickerVisible(true);
+    };
 
-            if (result.type === 'success') {
-                // Simulate account selection logic
-                setTimeout(() => {
-                    const mockGoogleUser = {
-                        uid: 'google-mock-' + Math.random().toString(36).substr(2, 9),
-                        name: 'Google User', // User requested the name matches
-                        email: 'user' + Math.floor(Math.random() * 1000) + '@gmail.com',
-                        photoUrl: 'https://i.pravatar.cc/150?u=google',
-                        isOwner: false,
-                        role: 'user'
-                    };
-                    setUser(mockGoogleUser);
-                    setLoading(false);
-                }, 800);
+    const handleAppleSignIn = () => {
+        setPickerType('Apple');
+        setIsAccountPickerVisible(true);
+    };
+
+    const onSelectAccount = async (account) => {
+        setIsAccountPickerVisible(false);
+        setLoading(true);
+
+        try {
+            // Verify in Database
+            const dbCheck = await checkUserInDatabase(account.email);
+
+            if (dbCheck.exists) {
+                const userData = { ...dbCheck.data, uid: dbCheck.uid };
+                setUser(userData);
+                saveAccountToHistory(userData);
             } else {
-                // If dismissed or canceled, just turn off loading and don't redirect
-                setLoading(false);
+                // User doesn't exist in DB - Create new profile
+                const newUser = {
+                    uid: account.uid || 'social-' + Math.random().toString(36).substr(2, 9),
+                    name: account.name,
+                    email: account.email,
+                    photoUrl: account.photoUrl || account.photo || 'https://i.pravatar.cc/150?u=' + account.email,
+                    role: 'user',
+                    createdAt: new Date().toISOString(),
+                    isOwner: false,
+                    isVerified: true
+                };
+
+                const { doc, setDoc } = require('firebase/firestore');
+                const { db } = require('../lib/firebase');
+                await setDoc(doc(db, 'users', newUser.uid), newUser);
+
+                setUser(newUser);
+                saveAccountToHistory(newUser);
             }
+
+            await AsyncStorage.setItem('rememberMe', 'true');
+            await AsyncStorage.setItem('lastLoginTime', new Date().getTime().toString());
         } catch (error) {
-            console.error("Google Sign In Error:", error);
+            Alert.alert("Social Login Error", error.message);
+        } finally {
             setLoading(false);
         }
     };
@@ -110,7 +139,7 @@ export default function SignInScreen({ navigation }) {
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.content}>
+                        <View style={[styles.content, { alignSelf: 'center', width: Dimensions.get('window').width > 768 ? 500 : '100%' }]}>
                             <Text style={[styles.title, { color: theme.colors.text }]}>Let's Sign You In</Text>
                             <Text style={[styles.subtitle, { color: theme.colors.textLight }]}>
                                 Welcome back
@@ -205,19 +234,7 @@ export default function SignInScreen({ navigation }) {
 
                                 <TouchableOpacity
                                     style={[styles.socialBtn, { backgroundColor: isDarkMode ? '#000' : '#000', borderColor: isDarkMode ? '#374151' : '#000', width: '48%' }]}
-                                    onPress={() => {
-                                        setLoading(true);
-                                        setTimeout(() => {
-                                            setUser({
-                                                uid: 'apple-mock-id',
-                                                name: 'Apple User',
-                                                email: 'appleuser@icloud.com',
-                                                isOwner: false,
-                                                role: 'user'
-                                            });
-                                            setLoading(false);
-                                        }, 1000);
-                                    }}
+                                    onPress={handleAppleSignIn}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Ionicons name="logo-apple" size={22} color="#fff" style={{ marginRight: 8 }} />
@@ -225,6 +242,16 @@ export default function SignInScreen({ navigation }) {
                                     </View>
                                 </TouchableOpacity>
                             </View>
+
+                            {/* Account Picker Modal */}
+                            <AccountPickerModal
+                                visible={isAccountPickerVisible}
+                                type={pickerType}
+                                onClose={() => setIsAccountPickerVisible(false)}
+                                onSelect={onSelectAccount}
+                                isDarkMode={isDarkMode}
+                                theme={theme}
+                            />
 
                             <View style={styles.footer}>
                                 <Text style={[styles.footerText, { color: theme.colors.textLight }]}>{"Don't have an account? "}</Text>
@@ -239,6 +266,62 @@ export default function SignInScreen({ navigation }) {
         </LinearGradient>
     );
 }
+
+const AccountPickerModal = ({ visible, type, onClose, onSelect, isDarkMode, theme }) => {
+    const { savedAccounts } = useApp();
+
+    // Filter saved accounts by type (Google/Apple) or show all
+    const accounts = savedAccounts.length > 0 ? savedAccounts : (
+        type === 'Google' ? [
+            { id: 'g1', name: 'John Doe', email: 'john.doe@gmail.com', photo: 'https://i.pravatar.cc/150?u=john' }
+        ] : [
+            { id: 'a1', name: 'Apple User', email: 'user@icloud.com', photo: null }
+        ]
+    );
+
+    if (!visible) return null;
+
+    return (
+        <View style={styles.modalOverlay}>
+            <TouchableOpacity activeOpacity={1} style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }} onPress={onClose}>
+                <View style={[styles.modalContent, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}>
+                    <View style={styles.modalHeader}>
+                        <Image
+                            source={{ uri: type === 'Google' ? 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' : 'https://cdn-icons-png.flaticon.com/512/0/512.png' }}
+                            style={styles.modalLogo}
+                        />
+                        <Text style={[styles.modalTitle, { color: isDarkMode ? '#fff' : '#000' }]}>Sign in with {type}</Text>
+                        <Text style={[styles.modalSubtitle, { color: theme.colors.textLight }]}>Choose an account to continue to QuickBite</Text>
+                    </View>
+
+                    {accounts.map((acc) => (
+                        <TouchableOpacity
+                            key={acc.id}
+                            style={[styles.accountItem, { borderColor: isDarkMode ? '#374151' : '#E5E7EB' }]}
+                            onPress={() => onSelect(acc)}
+                        >
+                            <View style={styles.accountAvatar}>
+                                {acc.photo ? (
+                                    <Image source={{ uri: acc.photo }} style={styles.avatarImg} />
+                                ) : (
+                                    <Ionicons name="person-circle" size={40} color={theme.colors.muted} />
+                                )}
+                            </View>
+                            <View style={styles.accountInfo}>
+                                <Text style={[styles.accountName, { color: isDarkMode ? '#fff' : '#000' }]}>{acc.name}</Text>
+                                <Text style={[styles.accountEmail, { color: theme.colors.textLight }]}>{acc.email}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+
+                    <TouchableOpacity style={styles.useAnotherBtn} onPress={onClose}>
+                        <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Use another account</Text>
+                    </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
@@ -311,5 +394,74 @@ const styles = StyleSheet.create({
 
     footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
     footerText: { fontSize: 15 },
-    createOneText: { fontSize: 15, fontWeight: '700' }
+    createOneText: { fontSize: 15, fontWeight: '700' },
+
+    // Modal Styles
+    modalOverlay: {
+        position: 'absolute',
+        top: -600, // Position relative to container
+        left: -24,
+        right: -24,
+        bottom: -600,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000
+    },
+    modalContent: {
+        width: '85%',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+    },
+    modalHeader: {
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    modalLogo: {
+        width: 40,
+        height: 40,
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        textAlign: 'center',
+    },
+    accountItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+    },
+    accountAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        overflow: 'hidden',
+    },
+    avatarImg: {
+        width: '100%',
+        height: '100%',
+    },
+    accountInfo: {
+        flex: 1,
+    },
+    accountName: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    accountEmail: {
+        fontSize: 13,
+    },
+    useAnotherBtn: {
+        marginTop: 20,
+        paddingVertical: 10,
+    }
 });

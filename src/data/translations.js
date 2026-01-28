@@ -17,7 +17,7 @@ export const translations = {
         owner_dashboard: 'Owner Dashboard',
 
         // Home
-        greeting: 'Now',
+        greeting: 'Hello!',
         explore_restaurants: 'Explore Restaurants',
         track_order: 'Track Order',
         active_order: 'Active Order',
@@ -98,7 +98,7 @@ export const translations = {
         owner_dashboard: 'Tableau de Bord Propriétaire',
 
         // Home
-        greeting: 'Maintenant',
+        greeting: 'Bonjour !',
         explore_restaurants: 'Explorer les Restaurants',
         track_order: 'Suivre la Commande',
         active_order: 'Commande Active',

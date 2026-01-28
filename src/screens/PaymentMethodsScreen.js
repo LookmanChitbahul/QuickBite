@@ -12,9 +12,11 @@ export default function PaymentMethodsScreen({ navigation }) {
 
     if (!context) return null;
 
-    const { theme, isDarkMode, orders } = context;
+    const { theme, isDarkMode, orders, paymentMethods, addPaymentMethod, deletePaymentMethod } = context;
     const [tempProof, setTempProof] = useState(null);
-    const [paymentProofs, setPaymentProofs] = useState([]);
+    const [paymentProofs, setPaymentProofs] = useState([]); // This stays local for session or could be synced too, but user specifically asked for "cards"
+    const [isAddCardVisible, setIsAddCardVisible] = useState(false);
+    const [newCard, setNewCard] = useState({ number: '', expiry: '', cvc: '', type: 'Visa' });
 
     const bgColor = theme?.colors?.background || '#F9FAFB';
     const cardColor = theme?.colors?.card || '#FFFFFF';
@@ -60,8 +62,33 @@ export default function PaymentMethodsScreen({ navigation }) {
         Alert.alert('Success', 'Payment proof inserted and saved to your profile.');
     };
 
-    const removeProof = (id) => {
-        setPaymentProofs(paymentProofs.filter(p => p.id !== id));
+    const handleAddCard = () => {
+        if (newCard.number.length < 16) {
+            Alert.alert("Error", "Please enter a valid card number");
+            return;
+        }
+        const card = {
+            id: Date.now().toString(),
+            type: newCard.type,
+            last4: newCard.number.slice(-4),
+            expiry: newCard.expiry,
+            icon: newCard.type === 'Visa' ? 'card' : 'card-outline'
+        };
+        addPaymentMethod(card);
+        setNewCard({ number: '', expiry: '', cvc: '', type: 'Visa' });
+        setIsAddCardVisible(false);
+        Alert.alert("Success", "Card added successfully");
+    };
+
+    const handleDeleteCard = (id) => {
+        Alert.alert(
+            "Delete Card",
+            "Are you sure you want to remove this card?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Delete", style: "destructive", onPress: () => deletePaymentMethod(id) }
+            ]
+        );
     };
 
     const openBankLink = (url) => {
@@ -96,11 +123,81 @@ export default function PaymentMethodsScreen({ navigation }) {
                     ))}
                 </View>
 
+                <View style={styles.cardSection}>
+                    <View style={styles.uploadHeader}>
+                        <Text style={[styles.sectionHeading, { color: textLightColor, marginBottom: 0 }]}>Saved Cards</Text>
+                        <TouchableOpacity
+                            style={[styles.plusButton, { backgroundColor: primaryColor }]}
+                            onPress={() => setIsAddCardVisible(!isAddCardVisible)}
+                        >
+                            <Ionicons name={isAddCardVisible ? "close" : "add"} size={28} color="#fff" />
+                        </TouchableOpacity>
+                    </View>
+
+                    {isAddCardVisible && (
+                        <View style={[styles.addCardForm, { backgroundColor: cardColor, borderColor: borderColor }]}>
+                            <TextInput
+                                style={[styles.cardInput, { color: textColor, borderColor: borderColor }]}
+                                placeholder="Card Number"
+                                placeholderTextColor={textLightColor}
+                                keyboardType="numeric"
+                                maxLength={16}
+                                value={newCard.number}
+                                onChangeText={(val) => setNewCard({ ...newCard, number: val })}
+                            />
+                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                                <TextInput
+                                    style={[styles.cardInput, { flex: 1, color: textColor, borderColor: borderColor }]}
+                                    placeholder="MM/YY"
+                                    placeholderTextColor={textLightColor}
+                                    maxLength={5}
+                                    value={newCard.expiry}
+                                    onChangeText={(val) => setNewCard({ ...newCard, expiry: val })}
+                                />
+                                <TextInput
+                                    style={[styles.cardInput, { flex: 1, color: textColor, borderColor: borderColor }]}
+                                    placeholder="CVC"
+                                    placeholderTextColor={textLightColor}
+                                    keyboardType="numeric"
+                                    maxLength={3}
+                                    secureTextEntry
+                                    value={newCard.cvc}
+                                    onChangeText={(val) => setNewCard({ ...newCard, cvc: val })}
+                                />
+                            </View>
+                            <TouchableOpacity style={[styles.saveCardBtn, { backgroundColor: primaryColor }]} onPress={handleAddCard}>
+                                <Text style={styles.saveCardBtnText}>Save Card</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {paymentMethods.length > 0 ? (
+                        paymentMethods.map((method) => (
+                            <View key={method.id} style={[styles.proofCard, { backgroundColor: cardColor, borderColor: borderColor }]}>
+                                <View style={[styles.bankCircle, { backgroundColor: primaryLightColor, marginRight: 15 }]}>
+                                    <Ionicons name={method.icon || 'card'} size={24} color={primaryColor} />
+                                </View>
+                                <View style={styles.proofDetails}>
+                                    <Text style={[styles.proofDate, { color: textColor, fontSize: 16 }]}>{method.type} **** {method.last4}</Text>
+                                    <Text style={[styles.proofDate, { color: textLightColor }]}>Expires {method.expiry || 'N/A'}</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => handleDeleteCard(method.id)}>
+                                    <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                                </TouchableOpacity>
+                            </View>
+                        ))
+                    ) : (
+                        <View style={[styles.emptyState, { borderColor: borderColor }]}>
+                            <Text style={{ color: textLightColor }}>No saved cards yet</Text>
+                        </View>
+                    )}
+                </View>
+
                 <View style={styles.uploadSection}>
                     <View style={styles.uploadHeader}>
-                        <Text style={[styles.sectionHeading, { color: textLightColor, marginBottom: 0 }]}>My Payment Assets</Text>
+                        <Text style={[styles.sectionHeading, { color: textLightColor, marginBottom: 0 }]}>Manual Bank Transfer Proofs</Text>
                         <TouchableOpacity style={[styles.plusButton, { backgroundColor: primaryColor }]} onPress={pickImage}>
-                            <Ionicons name="add" size={28} color="#fff" />
+                            <Ionicons name="camera" size={24} color="#fff" />
                         </TouchableOpacity>
                     </View>
 
@@ -288,5 +385,39 @@ const styles = StyleSheet.create({
     orderTotal: { marginTop: 12, fontSize: 14, fontWeight: 'bold', textAlign: 'right' },
     noProofPlaceholder: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#FEF2F2', borderRadius: 12 },
     emptyOrders: { height: 120, borderWidth: 1, borderStyle: 'dashed', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    emptyText: { marginTop: 10, fontSize: 14 }
+    emptyText: { marginTop: 10, fontSize: 14 },
+    addCardForm: {
+        padding: 15,
+        borderRadius: 16,
+        borderWidth: 1,
+        marginBottom: 20
+    },
+    cardInput: {
+        height: 50,
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingHorizontal: 15,
+        fontSize: 16
+    },
+    saveCardBtn: {
+        marginTop: 15,
+        height: 50,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    saveCardBtnText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16
+    },
+    emptyState: {
+        height: 80,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20
+    }
 });

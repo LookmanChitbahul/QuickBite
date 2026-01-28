@@ -7,6 +7,7 @@ import WelcomeScreen from '../screens/WelcomeScreen';
 import AuthScreen from '../screens/AuthScreen';
 import SignInScreen from '../screens/SignInScreen';
 import CreateAccountScreen from '../screens/CreateAccountScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import TabNavigator from './TabNavigator';
 import SettingsScreen from '../screens/SettingsScreen';
 import HelpScreen from '../screens/HelpScreen';
@@ -45,6 +46,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Auth" component={AuthScreen} />
           <Stack.Screen name="SignIn" component={SignInScreen} />
           <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         </>
       ) : (
         // 3. Main App Flow (Authenticated)

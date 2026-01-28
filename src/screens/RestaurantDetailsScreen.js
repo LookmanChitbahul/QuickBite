@@ -112,23 +112,6 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
                     </View>
                 </View>
 
-                <View style={styles.menuTabContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.menuTabs}>
-                        {menuCategories.map((cat) => (
-                            <TouchableOpacity
-                                key={cat}
-                                style={[styles.menuTab, activeMenuCat === cat && styles.activeMenuTab]}
-                                onPress={() => setActiveMenuCat(cat)}
-                            >
-                                <Text style={[
-                                    styles.menuTabText,
-                                    { color: isDarkMode ? '#9CA3AF' : '#6B7280' },
-                                    activeMenuCat === cat && { color: isDarkMode ? '#fff' : '#000', fontWeight: '900' }
-                                ]}>{cat}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
 
                 <FlatList
                     data={restaurant.menu}
@@ -137,7 +120,10 @@ export default function RestaurantDetailsScreen({ route, navigation }) {
                     contentContainerStyle={{ paddingBottom: 100 }}
                     showsVerticalScrollIndicator={false}
                     ListHeaderComponent={() => (
-                        <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000' }]}>{activeMenuCat}</Text>
+                        <View style={{ paddingHorizontal: 20, marginVertical: 10 }}>
+                            <Text style={[styles.sectionTitle, { color: isDarkMode ? '#fff' : '#000', paddingHorizontal: 0 }]}>Full Menu</Text>
+                            <Text style={{ color: isDarkMode ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>Explore all available meals and pricing</Text>
+                        </View>
                     )}
                 />
             </View>

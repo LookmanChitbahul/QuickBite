@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 
@@ -17,12 +17,20 @@ const RestaurantList = ({ restaurants, onPress, onToggleFavorite, ...props }) =>
     <FlatList
       data={restaurants}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={[styles.listContent, restaurants.length === 0 && { flex: 1 }]}
+      contentContainerStyle={[
+        styles.listContent,
+        restaurants.length === 0 && { flex: 1 },
+        { paddingHorizontal: Dimensions.get('window').width > 768 ? 20 : 16 }
+      ]}
       showsVerticalScrollIndicator={false}
       ListEmptyComponent={renderEmptyList}
       renderItem={({ item, index }) => (
         <TouchableOpacity
-          style={[styles.card, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}
+          style={[
+            styles.card,
+            { backgroundColor: isDarkMode ? '#1F2937' : '#fff' },
+            props.numColumns > 1 && { width: (Dimensions.get('window').width / props.numColumns) - 30, marginHorizontal: 10 }
+          ]}
           onPress={() => onPress && onPress(item)}
           activeOpacity={0.9}
         >

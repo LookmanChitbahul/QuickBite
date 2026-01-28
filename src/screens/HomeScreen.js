@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, ScrollView, TouchableOpacity, StatusBar, ImageBackground, Animated, Easing, Dimensions, Modal, TouchableWithoutFeedback, Platform, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +10,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }) {
-  const { restaurants, orders, theme, isDarkMode, user, toggleFavorite, settings, setActiveTab, t } = useApp();
+  const { restaurants, orders, theme, isDarkMode, user, toggleFavorite, settings, setActiveTab, t, userAddress } = useApp();
+  const isTablet = Dimensions.get('window').width > 768;
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredRestaurants, setFilteredRestaurants] = useState(restaurants);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -31,29 +32,25 @@ export default function HomeScreen({ navigation }) {
     { id: '6', name: t('bakery') || 'Bakery', icon: 'cafe' },
   ];
 
-  const promotions = [
-    {
-      id: 'p1',
-      title: 'Rs 100 OFF',
-      subtitle: t('promo_moka') || 'On your first order in Moka!',
-      image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-      color: theme.colors.primary
-    },
-    {
-      id: 'p2',
-      title: t('promo_ocean') || 'Ocean Basket Spec',
-      subtitle: t('promo_ocean_sub') || 'Fresh Seafood now delivery!',
-      image: 'https://images.unsplash.com/photo-1551731591-a2432441f94a?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-      color: theme.colors.secondary
-    },
-    {
-      id: 'p3',
-      title: t('promo_sitar') || 'Sitar Express',
-      subtitle: t('promo_sitar_sub') || 'Best Indian food in Bagatelle',
-      image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80',
-      color: '#10B981'
-    }
-  ];
+  // Derive dynamic promotions from restaurants menus
+  const promotions = useMemo(() => {
+    const promoItems = [];
+    restaurants.forEach(rest => {
+      if (rest.menu && rest.menu.length > 0) {
+        // Take first item of each restaurant as a possible promo
+        promoItems.push({
+          id: `promo-${rest.id}`,
+          title: rest.menu[0].name,
+          subtitle: `Special Deal at ${rest.name}`,
+          itemPrice: rest.menu[0].price,
+          image: rest.menu[0].image || rest.image,
+          color: rest.id === '1' ? '#EF4444' : (rest.id === '2' ? '#F59E0B' : '#10B981'),
+          restaurant: rest
+        });
+      }
+    });
+    return promoItems.slice(0, 5);
+  }, [restaurants]);
 
   const [activeCategory, setActiveCategory] = useState(null);
 
@@ -261,14 +258,18 @@ export default function HomeScreen({ navigation }) {
           key={cat.id}
           style={[
             styles.categoryItem,
-            activeCategory?.id === cat.id && { backgroundColor: theme.colors.primaryLight }
+            activeCategory?.id === cat.id && {
+              backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.08)',
+              borderColor: theme.colors.primary,
+              borderWidth: 1
+            }
           ]}
           onPress={() => setActiveCategory(activeCategory?.id === cat.id ? null : cat)}
         >
           <View style={[styles.categoryIcon, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}>
             <Ionicons name={cat.icon} size={24} color={activeCategory?.id === cat.id ? theme.colors.primary : theme.colors.text} />
           </View>
-          <Text style={[styles.categoryName, { color: theme.colors.text }]}>{cat.name}</Text>
+          <Text style={[styles.categoryName, { color: theme.colors.text, fontWeight: activeCategory?.id === cat.id ? '700' : '500' }]}>{cat.name}</Text>
         </TouchableOpacity>
       ))}
     </ScrollView>
@@ -291,14 +292,26 @@ export default function HomeScreen({ navigation }) {
         index,
       })}
       renderItem={({ item: promo }) => (
-        <TouchableOpacity key={promo.id} style={[styles.promoCard, { backgroundColor: promo.color }]}>
+        <TouchableOpacity
+          key={promo.id}
+          style={[styles.promoCard, { backgroundColor: promo.color }]}
+          onPress={() => handleRestaurantPress(promo.restaurant)}
+        >
           <ImageBackground source={{ uri: promo.image }} style={styles.promoBg} imageStyle={{ borderRadius: 20 }}>
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.6)']}
+              colors={['transparent', 'rgba(0,0,0,0.85)']}
               style={styles.promoGradient}
             >
-              <Text style={styles.promoTitle}>{promo.title}</Text>
-              <Text style={styles.promoSubtitle}>{promo.subtitle}</Text>
+              <View style={styles.promoBadge}>
+                <Text style={styles.promoBadgeText}>LIMITED OFFER</Text>
+              </View>
+              <Text style={styles.promoTitle} numberOfLines={1}>{promo.title}</Text>
+              <View style={styles.promoFooter}>
+                <Text style={styles.promoSubtitle}>{promo.subtitle}</Text>
+                <View style={styles.pricePill}>
+                  <Text style={styles.pricePillText}>Rs {promo.itemPrice}</Text>
+                </View>
+              </View>
             </LinearGradient>
           </ImageBackground>
         </TouchableOpacity>
@@ -332,7 +345,7 @@ export default function HomeScreen({ navigation }) {
                 <Text style={[styles.greeting, { color: theme.colors.textLight }]}>{t('greeting')}</Text>
                 <Ionicons name="caret-down" size={12} color={theme.colors.textLight} style={{ marginLeft: 4 }} />
               </View>
-              <Text style={[styles.locationTextHeader, { color: theme.colors.text }]}>Bagatelle Mall, Moka</Text>
+              <Text style={[styles.locationTextHeader, { color: theme.colors.text }]}>{userAddress}</Text>
             </View>
             <View style={{ flexDirection: 'row' }}>
               <TouchableOpacity
@@ -367,6 +380,8 @@ export default function HomeScreen({ navigation }) {
         restaurants={restaurantsWithLikes}
         onPress={handleRestaurantPress}
         onToggleFavorite={handleToggleFavorite}
+        numColumns={isTablet ? 2 : 1}
+        key={isTablet ? 'tablet' : 'mobile'} // Force re-render on orientation/size change
         ListHeaderComponent={() => (
           <View>
             <CategoryStrip />
@@ -468,9 +483,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   promoBg: { width: '100%', height: '100%', justifyContent: 'flex-end' },
-  promoGradient: { padding: 20, paddingTop: 60 },
-  promoTitle: { color: '#fff', fontSize: 24, fontWeight: '900' },
-  promoSubtitle: { color: '#fff', fontSize: 14, fontWeight: '600', opacity: 0.9 },
+  promoGradient: { padding: 15, height: '100%', justifyContent: 'flex-end' },
+  promoBadge: { backgroundColor: '#F59E0B', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
+  promoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  promoTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 2 },
+  promoFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  promoSubtitle: { color: '#fff', fontSize: 13, fontWeight: '600', opacity: 0.9, flex: 1 },
+  pricePill: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  pricePillText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 20, fontWeight: '900' },
   activeOrderContainer: { paddingHorizontal: 20, marginBottom: 30 },
