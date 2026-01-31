@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, Alert, Scro
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useApp } from '../context/AppContext';
 
 export default function EditProfileScreen({ navigation }) {
@@ -64,7 +65,17 @@ export default function EditProfileScreen({ navigation }) {
             });
 
             if (!result.canceled) {
-                setPhotoUrl(result.assets[0].uri);
+                const uri = result.assets[0].uri;
+                // Convert to Base64 for Firestore storage (as requested)
+                try {
+                    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+                    const mimeType = uri.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                    const dataUri = `data:${mimeType};base64,${base64}`;
+                    setPhotoUrl(dataUri);
+                } catch (e) {
+                    console.error("Base64 conversion failed", e);
+                    setPhotoUrl(uri); // Fallback
+                }
             }
         } catch (error) {
             console.log("Error picking image:", error);

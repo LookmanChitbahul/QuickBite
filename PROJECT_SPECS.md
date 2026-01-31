@@ -21,7 +21,20 @@ QuickBite is an ordering platform focused on **self-pickup**. The app allows use
     - Tapping a pin opens a "Little Box" (Info Window) displaying high-level restaurant details.
     - The Info Window contains a button to enter **Augmented Reality (AR)** mode.
 
-### 3. Augmented Reality (AR)
+### 3. Restaurant Owner Panel
+- **Revenue & Logs**: Owners can view their restaurant's revenue.
+- **Order Logs**: A real-time transaction log (like a bank statement) showing every order placed by users.
+- **Transaction Details**: Each entry shows order items, timestamp, and amount.
+
+### 4. UI & Theme (Profile Screen)
+- **Theme Inspiration**: MCB Juice app (Mauritius).
+- **Color Palette**: 
+    - Primary: Guardsman Red (#CC0000)
+    - Secondary: White (#FFFFFF)
+    - Accents: Bright Red (#B50000)
+- **Logout Button**: Must be **Orange**.
+
+### 5. Augmented Reality (AR)
 - **Technology**: ViroReact.
 - **Style**: Static AR similar to Pokémon GO.
 - **Functionality**:
@@ -29,7 +42,7 @@ QuickBite is an ordering platform focused on **self-pickup**. The app allows use
     - Capable of showing all restaurants in Mauritius as AR markers.
     - Includes a "Back" button to return to the previous screen (Map/Details).
 
-### 4. Technical Constraints
+### 6. Technical Constraints
 - **Location Services**: Must be enabled on the user's phone for accurate restaurant distance and map pinning.
 - **Authentication**: Supports Email/Password, Google Sign-In, and Apple Sign-In.
 

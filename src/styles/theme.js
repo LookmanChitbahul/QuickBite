@@ -1,6 +1,8 @@
 const palette = {
-  amber500: '#F59E0B',
-  amber600: '#D97706',
+  mcbRed: '#F97316',
+  mcbRedDark: '#EA580C',
+  mcbRedLight: 'rgba(249, 115, 22, 0.1)',
+  orange500: '#FFA500',
   amber100: '#FEF3C7',
   red500: '#EF4444',
   red50: '#FEF2F2',
@@ -21,10 +23,10 @@ const palette = {
 export const lightTheme = {
   mode: 'light',
   colors: {
-    primary: palette.amber500,
-    primaryDark: palette.amber600,
-    primaryLight: palette.amber100,
-    secondary: palette.red500,
+    primary: palette.mcbRed,
+    primaryDark: palette.mcbRedDark,
+    primaryLight: palette.mcbRedLight,
+    secondary: palette.mcbRedDark,
     background: palette.gray50,
     card: palette.white,
     text: palette.gray800,
@@ -38,6 +40,7 @@ export const lightTheme = {
     muted: palette.gray400,
     input: palette.gray100,
     overlay: 'rgba(0,0,0,0.5)',
+    logout: palette.orange500,
   },
   spacing: { s: 8, m: 16, l: 24, xl: 32 },
   borderRadius: { s: 8, m: 12, l: 16, circle: 9999 },
@@ -46,10 +49,10 @@ export const lightTheme = {
 export const darkTheme = {
   mode: 'dark',
   colors: {
-    primary: palette.amber500,
-    primaryDark: palette.amber600,
-    primaryLight: 'rgba(245, 158, 11, 0.2)', // transparent amber
-    secondary: palette.red500,
+    primary: palette.mcbRed,
+    primaryDark: palette.mcbRedDark,
+    primaryLight: 'rgba(204, 0, 0, 0.2)', // transparent red
+    secondary: palette.mcbRedDark,
     background: palette.gray900,
     card: palette.gray800,
     text: palette.gray50,
@@ -63,6 +66,7 @@ export const darkTheme = {
     muted: palette.gray500,
     input: '#374151',
     overlay: 'rgba(0,0,0,0.7)',
+    logout: palette.orange500,
   },
   spacing: { s: 8, m: 16, l: 24, xl: 32 },
   borderRadius: { s: 8, m: 12, l: 16, circle: 9999 },

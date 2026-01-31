@@ -20,6 +20,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 import CartScreen from '../screens/CartScreen';
+import ARScreen from '../screens/ARScreen';
 import theme from '../styles/theme';
 
 const Stack = createNativeStackNavigator();
@@ -63,6 +64,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Map" component={DeliveryScreen} />
           <Stack.Screen name="Cart" component={CartScreen} />
           <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
+          <Stack.Screen name="ARScreen" component={ARScreen} />
         </>
       )}
     </Stack.Navigator>

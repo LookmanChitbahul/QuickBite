@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, ScrollView, TouchableOpacity, StatusBar, ImageBackground, Animated, Easing, Dimensions, Modal, TouchableWithoutFeedback, Platform, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import SearchBar from '../components/SearchBar';
 import RestaurantList from '../components/RestaurantList';
 import { useApp } from '../context/AppContext';
@@ -13,7 +13,23 @@ export default function HomeScreen({ navigation }) {
   const { restaurants, orders, theme, isDarkMode, user, toggleFavorite, settings, setActiveTab, t, userAddress } = useApp();
   const isTablet = Dimensions.get('window').width > 768;
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredRestaurants, setFilteredRestaurants] = useState(restaurants);
+  // Filter out duplicate brands for display - only show first instance of each brand
+  const uniqueBrandRestaurants = useMemo(() => {
+    const distinct = [];
+    const map = new Map();
+    for (const r of restaurants) {
+      const key = r.brand || r.name; // Fallback to name if brand missing
+      if (!map.has(key)) {
+        map.set(key, true);
+        // Create a display copy with the brand name (e.g. "KFC") instead of specific location
+        const displayRest = { ...r, name: r.brand || r.name };
+        distinct.push(displayRest);
+      }
+    }
+    return distinct;
+  }, [restaurants]);
+
+  const [filteredRestaurants, setFilteredRestaurants] = useState(uniqueBrandRestaurants);
   const [showNotifications, setShowNotifications] = useState(false);
   const slideAnim = useRef(new Animated.Value(width)).current;
 
@@ -24,32 +40,37 @@ export default function HomeScreen({ navigation }) {
   const [scrollDirection, setScrollDirection] = useState(1);
 
   const categories = [
-    { id: '1', name: t('chicken') || 'Chicken', icon: 'nutrition' },
-    { id: '2', name: t('pizza') || 'Pizza', icon: 'pizza' },
+    { id: '1', name: t('chicken') || 'Chicken', icon: 'food-drumstick', type: 'MCI' },
+    { id: '2', name: t('pizza') || 'Pizza', icon: 'pizza', type: 'Ionicons' },
     { id: '3', name: t('burgers') || 'Burgers', icon: 'fast-food' },
     { id: '4', name: t('indian') || 'Indian', icon: 'flame' },
     { id: '5', name: t('seafood') || 'Seafood', icon: 'fish' },
     { id: '6', name: t('bakery') || 'Bakery', icon: 'cafe' },
   ];
 
-  // Derive dynamic promotions from restaurants menus
+  // Derive dynamic promotions from restaurants menus - ONE per restaurant
   const promotions = useMemo(() => {
     const promoItems = [];
+    const seenBrands = new Set();
+
     restaurants.forEach(rest => {
-      if (rest.menu && rest.menu.length > 0) {
-        // Take first item of each restaurant as a possible promo
+      const brandKey = rest.brand || rest.name;
+      // Only add if we haven't seen this brand yet
+      if (!seenBrands.has(brandKey) && rest.menu && rest.menu.length > 0) {
+        seenBrands.add(brandKey);
+        const item = rest.menu[0];
         promoItems.push({
           id: `promo-${rest.id}`,
-          title: rest.menu[0].name,
-          subtitle: `Special Deal at ${rest.name}`,
-          itemPrice: rest.menu[0].price,
-          image: rest.menu[0].image || rest.image,
-          color: rest.id === '1' ? '#EF4444' : (rest.id === '2' ? '#F59E0B' : '#10B981'),
+          title: item.name,
+          subtitle: `Special at ${rest.brand || rest.name}`,
+          itemPrice: item.price,
+          image: item.image || rest.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+          color: promoItems.length % 2 === 0 ? '#F97316' : '#EA580C',
           restaurant: rest
         });
       }
     });
-    return promoItems.slice(0, 5);
+    return promoItems;
   }, [restaurants]);
 
   const [activeCategory, setActiveCategory] = useState(null);
@@ -74,7 +95,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   useEffect(() => {
-    let filtered = restaurants;
+    let filtered = uniqueBrandRestaurants;
     if (searchQuery) {
       filtered = filtered.filter((restaurant) =>
         restaurant.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -192,12 +213,16 @@ export default function HomeScreen({ navigation }) {
                     <TouchableOpacity
                       style={[styles.notiAction, { backgroundColor: theme.colors.primary }]}
                       onPress={() => {
+                        const restaurant = restaurants.find(r => r.id === latestOrder.restaurantId);
                         toggleNotifications(false);
-                        setActiveTab('Orders');
+                        setTimeout(() => {
+                          setActiveTab('Map');
+                          navigation.navigate('Map', { restaurant: restaurant });
+                        }, 350);
                       }}
                     >
-                      <Text style={styles.notiActionText}>{t('track_live')}</Text>
-                      <Ionicons name="arrow-forward" size={16} color="#fff" />
+                      <Text style={styles.notiActionText}>{t('show_location') || 'Show Location'}</Text>
+                      <Ionicons name="location-outline" size={16} color="#fff" />
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -223,21 +248,26 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.activeOrderContainer}>
         <View style={styles.activeOrderHeader}>
           <Text style={[styles.activeOrderTitle, { color: theme.colors.text }]}>{t('active_order')}</Text>
-          <TouchableOpacity onPress={() => setActiveTab('Orders')}>
-            <Text style={[styles.trackText, { color: theme.colors.primary }]}>{t('track_order')}</Text>
-          </TouchableOpacity>
         </View>
         <TouchableOpacity
           style={[styles.activeOrderCard, { backgroundColor: theme.colors.card, shadowColor: theme.colors.primary }]}
-          onPress={() => toggleNotifications(true)}
+          onPress={() => {
+            if (!showNotifications) {
+              toggleNotifications(true);
+            }
+          }}
         >
           <View style={[styles.orderIcon, { backgroundColor: theme.colors.primary }]}>
-            <Ionicons name="fast-food" size={24} color="#fff" />
+            {/* Changed icon to map/location style */}
+            <Ionicons name="map" size={24} color="#fff" />
           </View>
           <View style={styles.getOrderInfo}>
             <Text style={[styles.orderStatus, { color: theme.colors.primary }]}>{latestOrder.status}</Text>
             <Text style={[styles.orderRestaurant, { color: theme.colors.text }]}>{latestOrder.restaurantName}</Text>
-            <Text style={[styles.orderItems, { color: theme.colors.textLight }]}>{latestOrder.items.length} items • Rs {latestOrder.total.toFixed(2)}</Text>
+            {/* Cleaned up text, removed potential underscore artifacts */}
+            <Text style={[styles.orderItems, { color: theme.colors.textLight }]}>
+              {latestOrder.location?.latitude ? 'Track Location' : 'Order Placed'} • {latestOrder.items.length} items
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
         </TouchableOpacity>
@@ -267,7 +297,11 @@ export default function HomeScreen({ navigation }) {
           onPress={() => setActiveCategory(activeCategory?.id === cat.id ? null : cat)}
         >
           <View style={[styles.categoryIcon, { backgroundColor: isDarkMode ? '#1F2937' : '#fff' }]}>
-            <Ionicons name={cat.icon} size={24} color={activeCategory?.id === cat.id ? theme.colors.primary : theme.colors.text} />
+            {cat.type === 'MCI' ? (
+              <MaterialCommunityIcons name={cat.icon} size={24} color={activeCategory?.id === cat.id ? theme.colors.primary : theme.colors.text} />
+            ) : (
+              <Ionicons name={cat.icon} size={24} color={activeCategory?.id === cat.id ? theme.colors.primary : theme.colors.text} />
+            )}
           </View>
           <Text style={[styles.categoryName, { color: theme.colors.text, fontWeight: activeCategory?.id === cat.id ? '700' : '500' }]}>{cat.name}</Text>
         </TouchableOpacity>
@@ -342,7 +376,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.headerContent}>
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={[styles.greeting, { color: theme.colors.textLight }]}>{t('greeting')}</Text>
+                <Text style={[styles.greeting, { color: theme.colors.textLight }]}>Delivering to</Text>
                 <Ionicons name="caret-down" size={12} color={theme.colors.textLight} style={{ marginLeft: 4 }} />
               </View>
               <Text style={[styles.locationTextHeader, { color: theme.colors.text }]}>{userAddress}</Text>
@@ -484,7 +518,7 @@ const styles = StyleSheet.create({
   },
   promoBg: { width: '100%', height: '100%', justifyContent: 'flex-end' },
   promoGradient: { padding: 15, height: '100%', justifyContent: 'flex-end' },
-  promoBadge: { backgroundColor: '#F59E0B', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
+  promoBadge: { backgroundColor: '#F97316', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
   promoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   promoTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 2 },
   promoFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

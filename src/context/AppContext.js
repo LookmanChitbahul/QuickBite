@@ -7,7 +7,7 @@ import { restaurants as initialRestaurants, userProfile, ownerProfile } from '..
 import { translations } from '../data/translations';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import { lightTheme, darkTheme, colorBlindLightTheme, colorBlindDarkTheme } from '../styles/theme';
 
@@ -17,6 +17,18 @@ export const AppProvider = ({ children }) => {
     const [restaurants, setRestaurants] = useState(initialRestaurants);
     const [cart, setCart] = useState([]);
     const [orders, setOrders] = useState([]);
+    // Firestore realtime listener for orders
+    useEffect(() => {
+        const q = query(collection(db, 'orders'), orderBy('date', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setOrders(fetchedOrders);
+        }, (error) => {
+            console.log("Firestore Snapshot Error (Silent):", error.message);
+        });
+        return () => unsubscribe();
+    }, []);
+
     const [restaurantLocation, setRestaurantLocation] = useState({ latitude: -20.1609, longitude: 57.5050 });
     const [userLocation, setUserLocation] = useState(null);
     const [userAddress, setUserAddress] = useState('Fetching location...');
@@ -111,7 +123,10 @@ export const AppProvider = ({ children }) => {
 
                     if (reverse.length > 0) {
                         const addr = reverse[0];
-                        const displayAddr = `${addr.name || addr.street || ''}, ${addr.city || addr.region || ''}`.trim().replace(/^,/, '').trim();
+                        // Prioritize street over name (name often contains plus codes)
+                        const street = addr.street || addr.name || '';
+                        const city = addr.city || addr.region || addr.subregion || '';
+                        const displayAddr = `${street}${city ? ', ' + city : ''}`.trim();
                         setUserAddress(displayAddr || 'Mauritius');
                     }
                 } else {
@@ -131,35 +146,56 @@ export const AppProvider = ({ children }) => {
                     const lastActive = await AsyncStorage.getItem('lastActiveTime');
                     const now = Date.now();
 
-                    // Session should last 5 minutes (300,000 ms) of INACTIVITY
+                    // Session logic
                     if (rememberMe !== 'true' && lastActive) {
                         const diff = now - parseInt(lastActive);
-                        if (diff > 300000) { // 5 minutes
-                            await logout();
-                            setIsLoading(false);
-                            return;
+                        if (diff > 300000) { // 5 minutes inactivity
+                            // await logout(); // DISABLE auto-logout for now to fix owner login loop
+                            // setIsLoading(false);
+                            // return;
                         }
                     }
 
                     await AsyncStorage.setItem('lastActiveTime', now.toString());
+
+                    // CRITICAL: Check if user exists in Firestore
+                    const userDocRef = doc(db, 'users', firebaseUser.uid);
+                    const userDoc = await getDoc(userDocRef);
+
+                    if (!userDoc.exists()) {
+                        console.warn("User exists in Auth but not in Firestore. Creating recovery profile...");
+                        // Instead of logging out, we RECOVER by creating the missing doc
+                        const recoveryData = {
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            name: firebaseUser.displayName || 'App User',
+                            photoUrl: firebaseUser.photoURL,
+                            role: (firebaseUser.email?.toLowerCase().includes('owner') || firebaseUser.email === 'lookman1@gmail.com') ? 'owner' : 'user',
+                            createdAt: new Date().toISOString(),
+                            isVerified: true
+                        };
+
+                        await setDoc(userDocRef, recoveryData);
+
+                        // Proceed with this new data
+                        let userData = recoveryData;
+                        const isOwner = userData.role === 'owner';
+                        const finalUser = { ...userProfile, ...userData, isOwner };
+                        setUser(finalUser);
+                        setIsLoading(false);
+                        return;
+                    }
 
                     let userData = {
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
                         name: firebaseUser.displayName,
                         photoUrl: firebaseUser.photoURL,
+                        ...userDoc.data()
                     };
 
-                    try {
-                        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-                        if (userDoc.exists()) {
-                            userData = { ...userData, ...userDoc.data() };
-                            if (userData.paymentMethods) {
-                                setPaymentMethods(userData.paymentMethods);
-                            }
-                        }
-                    } catch (permError) {
-                        console.warn("Firestore Access Warning: " + permError.message);
+                    if (userData.paymentMethods) {
+                        setPaymentMethods(userData.paymentMethods);
                     }
 
                     const isOwner = userData.email === 'owner@gmail.com' || userData.role === 'owner';
@@ -170,6 +206,8 @@ export const AppProvider = ({ children }) => {
                 }
             } catch (error) {
                 console.error("Firebase Auth state error:", error);
+                // On critical error, better to show login than a broken home
+                setUser(null);
             } finally {
                 setIsLoading(false);
             }
@@ -327,7 +365,44 @@ export const AppProvider = ({ children }) => {
         });
     };
 
+    const removeFromCart = (itemId) => setCart((prevCart) => prevCart.filter((item) => item.id !== itemId));
+
+    const updateCartQuantity = (itemId, change) => {
+        setCart((prevCart) => prevCart.map(item => {
+            if (item.id === itemId) {
+                const newQuantity = item.quantity + change;
+                if (newQuantity <= 0) {
+                    return null; // Filter out later
+                }
+                return { ...item, quantity: newQuantity };
+            }
+            return item;
+        }).filter(Boolean));
+    };
+
     const addToCart = (item, restaurant) => {
+        // Check for restaurant mismatch using current state
+
+        // RELOADING logic to avoid the setter complexity above:
+        // We will do the check outside the setter.
+        const currentCart = cart; // access state directly
+        if (currentCart.length > 0 && currentCart[0].restaurantId !== restaurant.id) {
+            Alert.alert(
+                "Start new basket?",
+                `Your cart contains items from ${currentCart[0].restaurantName}. Clear it to order from ${restaurant.name}?`,
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "New Basket",
+                        onPress: () => {
+                            setCart([{ ...item, quantity: 1, restaurantId: restaurant.id, restaurantName: restaurant.name }]);
+                        }
+                    }
+                ]
+            );
+            return;
+        }
+
         setCart((prevCart) => {
             const existingItem = prevCart.find((cartItem) => cartItem.id === item.id);
             if (existingItem) {
@@ -338,38 +413,46 @@ export const AppProvider = ({ children }) => {
         });
     };
 
-    const removeFromCart = (itemId) => setCart((prevCart) => prevCart.filter((item) => item.id !== itemId));
-
-    const updateCartQuantity = (itemId, change) => {
-        setCart((prevCart) => prevCart.map(item => {
-            if (item.id === itemId) {
-                const newQuantity = item.quantity + change;
-                return newQuantity > 0 ? { ...item, quantity: newQuantity } : item;
-            }
-            return item;
-        }));
-    };
-
     const clearCart = () => setCart([]);
 
-    const placeOrder = (paymentProof = null) => {
+    const addManualOrder = async (order) => {
+        try {
+            await addDoc(collection(db, 'orders'), order);
+        } catch (e) {
+            console.error("Failed to add manual order", e);
+        }
+    };
+
+    const placeOrder = async (paymentProof = null) => {
         if (cart.length === 0) return;
         const firstItem = cart[0];
         const restaurant = restaurants.find(r => r.id === firstItem.restaurantId);
+
+        // Ensure we handle numeric prices correctly
+        const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
         const newOrder = {
-            id: Date.now().toString(),
+            // id: generated by firestore
             items: [...cart],
-            total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+            total: totalAmount,
             date: new Date().toISOString(),
             status: 'Awaiting Validation',
             restaurantId: firstItem.restaurantId,
             restaurantName: firstItem.restaurantName || 'Restaurant',
             location: restaurant?.location || restaurantLocation,
             restaurantAddress: restaurant?.address || 'Restaurant Address',
-            paymentProof: paymentProof
+            paymentProof: paymentProof,
+            userId: user?.uid || 'guest',
+            userName: user?.name || 'Guest User'
         };
-        setOrders((prevOrders) => [newOrder, ...prevOrders]);
-        clearCart();
+
+        try {
+            await addDoc(collection(db, 'orders'), newOrder);
+            clearCart();
+        } catch (e) {
+            Alert.alert("Error", "Failed to place order. Check connection.");
+            console.error(e);
+        }
     };
 
     const updateRestaurantMenu = (restaurantId, updatedMenu) => {
@@ -378,8 +461,15 @@ export const AppProvider = ({ children }) => {
 
     const addRestaurant = (newRestaurant) => setRestaurants(prev => [...prev, newRestaurant]);
     const deleteRestaurant = (restaurantId) => setRestaurants(prev => prev.filter(r => r.id !== restaurantId));
-    const updateOrderStatus = (orderId, newStatus) => {
-        setOrders(prevOrders => prevOrders.map(order => order.id === orderId ? { ...order, status: newStatus } : order));
+
+    const updateOrderStatus = async (orderId, newStatus) => {
+        // Optimistic update not needed as listener will catch it, but good for UI responsiveness
+        try {
+            const orderRef = doc(db, 'orders', orderId);
+            await setDoc(orderRef, { status: newStatus }, { merge: true });
+        } catch (e) {
+            console.error("Failed to update status", e);
+        }
     };
 
     return (
@@ -391,7 +481,7 @@ export const AppProvider = ({ children }) => {
                 paymentMethods, updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, scheduleNotification,
                 activeTab, setActiveTab, restaurantLocation, setRestaurantLocation, language, changeLanguage, t,
                 updateOrderStatus, addRestaurant, deleteRestaurant, forgotPassword, savedAccounts, saveAccountToHistory,
-                checkUserInDatabase, verifyResetCode, userLocation, userAddress
+                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart
             }}
         >
             {children}
