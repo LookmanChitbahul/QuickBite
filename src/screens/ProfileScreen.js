@@ -12,22 +12,21 @@ export default function ProfileScreen({ navigation }) {
 
   const { user, orders, theme, isDarkMode, toggleTheme, settings, toggleSettings, logout, scheduleNotification, paymentMethods, t } = context;
 
+  const logoutBg = theme?.colors?.logout || '#FFA500';
+  const logoutTextColor = '#FFFFFF';
+
   // Safe color access
-  const primaryColor = theme?.colors?.primary || '#F59E0B';
+  const primaryColor = theme?.colors?.primary || '#CC0000';
   const successColor = theme?.colors?.success || '#10B981';
 
-  // Dynamic Glass Styles
-  const glassColor = isDarkMode ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.55)';
-  const glassBorder = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.6)';
+  // Dynamic Styles
+  const glassColor = isDarkMode ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 1)';
+  const glassBorder = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
   const textColor = isDarkMode ? '#FFFFFF' : '#111827';
   const subTextColor = isDarkMode ? '#9CA3AF' : '#4B5563';
   const iconColor = isDarkMode ? '#FFFFFF' : primaryColor;
-  const iconBg = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.5)';
+  const iconBg = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
   const dividerColor = isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)';
-  const overlayColors = isDarkMode ? ['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.9)'] : ['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.4)'];
-
-  const logoutBg = isDarkMode ? 'rgba(239, 68, 68, 0.15)' : 'rgba(254, 226, 226, 0.7)';
-  const logoutBorder = isDarkMode ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.5)';
 
   const handleNavigation = (screen) => {
     if (screen === 'Orders') {
@@ -41,7 +40,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const menuItems = [
-    ...(user.isOwner ? [{ title: t('owner_dashboard'), icon: 'business-outline', screen: 'OwnerDashboard' }] : []),
+    ...(user.isOwner ? [{ title: 'Owner Dashboard', icon: 'speedometer-outline', screen: 'OwnerDashboard', isOwner: true }] : []),
     { title: 'Order History', icon: 'receipt-outline', screen: 'OrderHistory' },
     { title: t('payment_methods'), icon: 'card-outline', screen: 'PaymentMethods' },
     { title: t('settings'), icon: 'settings-outline', screen: 'Settings' },
@@ -54,16 +53,11 @@ export default function ProfileScreen({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Background Image */}
-      <ImageBackground
-        source={require('../assets/images/night_mountain.png')}
-        style={StyleSheet.absoluteFill}
-        resizeMode="cover"
-      >
-        <LinearGradient
-          colors={overlayColors}
-          style={StyleSheet.absoluteFill}
-        />
-      </ImageBackground>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.background }]} />
+      <LinearGradient
+        colors={isDarkMode ? ['#1a1a1a', '#000000'] : [theme?.colors?.primary || '#F97316', theme?.colors?.primaryDark || '#EA580C']}
+        style={styles.headerGradientBg}
+      />
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
 
       {/* Header Profile Section */}
@@ -87,19 +81,7 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={[styles.name, { color: '#FFFFFF' }]}>{user.name}</Text>
                   <Text style={[styles.email, { color: '#E5E7EB' }]}>{user.email}</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.headerSettingsBtn}
-                  onPress={() => navigation.navigate('Settings')}
-                >
-                  <Ionicons name="settings-outline" size={24} color="#FFF" />
-                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.editButton, { backgroundColor: theme?.colors?.primaryLight || 'rgba(245, 158, 11, 0.2)' }]}
-                onPress={() => navigation.navigate('EditProfile')}
-              >
-                <Text style={[styles.editButtonText, { color: theme?.colors?.primaryDark || '#D97706' }]}>Edit Profile</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -120,24 +102,6 @@ export default function ProfileScreen({ navigation }) {
               <Text style={[styles.statLabel, { color: subTextColor }]}>Reviews</Text>
             </View>
           </View>
-
-          {/* Direct Owner Dashboard Link (only for owners) */}
-          {user.isOwner && (
-            <TouchableOpacity
-              style={[styles.ownerAccessBtn, { backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)', borderColor: primaryColor }]}
-              onPress={() => navigation.navigate('OwnerDashboard')}
-            >
-              <LinearGradient
-                colors={isDarkMode ? ['rgba(245,158,11,0.2)', 'rgba(245,158,11,0.05)'] : ['rgba(245,158,11,0.1)', 'rgba(245,158,11,0.02)']}
-                style={styles.ownerBtnGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-              <Ionicons name="speedometer-outline" size={20} color={primaryColor} />
-              <Text style={[styles.ownerAccessText, { color: textColor }]}>Open Owner Dashboard</Text>
-              <Ionicons name="arrow-forward" size={18} color={primaryColor} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
@@ -147,27 +111,29 @@ export default function ProfileScreen({ navigation }) {
           {menuItems.map((item, index) => (
             <TouchableOpacity
               key={index}
-              style={[styles.menuItem, { borderBottomColor: dividerColor, borderBottomWidth: index === menuItems.length - 1 ? 0 : 1 }]}
+              style={[
+                styles.menuItem,
+                { borderBottomColor: dividerColor, borderBottomWidth: index === menuItems.length - 1 ? 0 : 1 },
+                item.isOwner && { backgroundColor: '#F97316', borderRadius: 12, marginBottom: 8, marginHorizontal: 0, paddingVertical: 16, borderBottomWidth: 0 }
+              ]}
               onPress={() => handleNavigation(item.screen)}
             >
-              <View style={[styles.menuIconContainer, { backgroundColor: iconBg }]}>
-                <Ionicons name={item.icon} size={22} color={iconColor} />
+              <View style={[styles.menuIconContainer, { backgroundColor: item.isOwner ? 'rgba(255,255,255,0.2)' : iconBg }]}>
+                <Ionicons name={item.icon} size={22} color={item.isOwner ? '#FFFFFF' : iconColor} />
               </View>
-              <Text style={[styles.menuText, { color: textColor }]}>{item.title}</Text>
-              <Ionicons name="chevron-forward" size={20} color={subTextColor} />
+              <Text style={[styles.menuText, { color: item.isOwner ? '#FFFFFF' : textColor, fontWeight: item.isOwner ? '600' : '400' }]}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={20} color={item.isOwner ? '#FFFFFF' : subTextColor} />
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={[styles.glassContainer, { marginTop: 10, borderColor: logoutBorder, backgroundColor: logoutBg }]}>
-          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={logout}>
-            <View style={[styles.menuIconContainer, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)' }]}>
-              <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-            </View>
-            <Text style={[styles.menuText, { color: '#EF4444' }]}>{t('logout')}</Text>
-            <Ionicons name="chevron-forward" size={20} color="rgba(239, 68, 68, 0.5)" />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: logoutBg }]}
+          onPress={logout}
+        >
+          <Ionicons name="log-out-outline" size={22} color={logoutTextColor} />
+          <Text style={[styles.logoutButtonText, { color: logoutTextColor }]}>{t('logout')}</Text>
+        </TouchableOpacity>
 
         <View style={styles.versionContainer}>
           <Text style={[styles.versionText, { color: 'rgba(255,255,255,0.5)' }]}>{t('version')} 1.1.0</Text>
@@ -180,6 +146,7 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent' // Handled by gradient, but content needs bg below
   },
   header: {
     marginBottom: 16,
@@ -323,5 +290,28 @@ const styles = StyleSheet.create({
   headerSettingsBtn: {
     padding: 8,
     marginLeft: 10
+  },
+  headerGradientBg: {
+    ...StyleSheet.absoluteFillObject,
+    height: 300,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
   }
 });

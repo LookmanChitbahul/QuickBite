@@ -21,17 +21,20 @@ export default function OwnerDashboardScreen({ navigation }) {
         orders,
         updateOrderStatus,
         addRestaurant,
-        deleteRestaurant
+        deleteRestaurant,
+        addManualOrder
     } = useApp();
 
     const [selectedProof, setSelectedProof] = useState(null);
-    const [revenueResId, setRevenueResId] = useState(ownerRestaurantId || restaurants[0]?.id);
+    const [revenueResId, setRevenueResId] = useState('all'); // Default to ALL
     const [isAddingRest, setIsAddingRest] = useState(false);
     const [newRest, setNewRest] = useState({ name: '', address: '', description: '', tags: '', image: null });
     const [isReportModalVisible, setIsReportModalVisible] = useState(false);
     const [isResPickerVisible, setIsResPickerVisible] = useState(false);
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewContent, setPreviewContent] = useState(null);
+    const [isArTestVisible, setIsArTestVisible] = useState(false);
+    const [arTestLoc, setArTestLoc] = useState({ lat: '-20.2443', lng: '57.4882', name: 'Test Place' });
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -54,14 +57,51 @@ export default function OwnerDashboardScreen({ navigation }) {
 
     const myRestaurant = restaurants.find(r => r.id === ownerRestaurantId);
 
-    // Revenue calculation for selected restaurant
+    // Revenue calculation
+    // Revenue calculation
     const totalRevenue = useMemo(() => {
-        return orders
-            .filter(o => o.restaurantId === revenueResId && (o.status === 'Confirmed' || o.status === 'Picked Up'))
-            .reduce((sum, o) => sum + o.total, 0);
-    }, [orders, revenueResId]);
+        let filteredOrders = orders.filter(o => o.status === 'Confirmed' || o.status === 'Picked Up');
 
-    const revenueRestName = restaurants.find(r => r.id === revenueResId)?.name || 'Select Restaurant';
+        if (revenueResId === 'all') {
+            // No filter, take all
+        } else if (revenueResId.startsWith('BRAND_')) {
+            const brandName = revenueResId.replace('BRAND_', '');
+            // Filter orders where the restaurant belongs to this brand
+            // We need to look up the restaurant for each order to check its brand
+            filteredOrders = filteredOrders.filter(o => {
+                const rest = restaurants.find(r => r.id === o.restaurantId);
+                return rest && (rest.brand === brandName || rest.name.includes(brandName));
+            });
+        } else {
+            // Specific restaurant ID
+            filteredOrders = filteredOrders.filter(o => o.restaurantId === revenueResId);
+        }
+
+        return filteredOrders.reduce((sum, o) => sum + o.total, 0);
+    }, [orders, revenueResId, restaurants]);
+
+    const revenueRestName = useMemo(() => {
+        if (revenueResId === 'all') return 'All Restaurants';
+        if (revenueResId.startsWith('BRAND_')) return `${revenueResId.replace('BRAND_', '')} (All Branches)`;
+        return restaurants.find(r => r.id === revenueResId)?.name || 'Select Restaurant';
+    }, [revenueResId, restaurants]);
+
+    const filteredTransactions = useMemo(() => {
+        let list = orders;
+        if (revenueResId !== 'all') {
+            if (revenueResId.startsWith('BRAND_')) {
+                const brandName = revenueResId.replace('BRAND_', '');
+                list = list.filter(o => {
+                    const rest = restaurants.find(r => r.id === o.restaurantId);
+                    return rest && (rest.brand === brandName || rest.name.includes(brandName));
+                });
+            } else {
+                list = list.filter(o => o.restaurantId === revenueResId);
+            }
+        }
+        // Sort by date descending
+        return list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [orders, revenueResId, restaurants]);
 
     // Pending orders for ALL restaurants (since we are in an "Owner/Admin" dev mode)
     const pendingOrders = orders.filter(o => o.status === 'Awaiting Validation');
@@ -110,6 +150,40 @@ export default function OwnerDashboardScreen({ navigation }) {
                 }
             })).concat([{ text: "Cancel", style: "cancel" }])
         );
+    };
+
+    const handleCreateTestOrder = () => {
+        const testOrder = {
+            id: `TEST-${Math.floor(1000 + Math.random() * 9000)}`,
+            items: [{ id: 'test1', name: 'Sample Item', quantity: 1, price: 150 }],
+            total: 150,
+            date: new Date().toISOString(),
+            status: 'Awaiting Validation',
+            restaurantId: revenueResId !== 'all' ? revenueResId : restaurants[0].id,
+            restaurantName: restaurants.find(r => r.id === (revenueResId !== 'all' ? revenueResId : restaurants[0].id))?.name || 'My Restaurant',
+            restaurantAddress: 'Testing Lane, Mauritius',
+            paymentProof: 'https://images.unsplash.com/photo-1554224155-1697467265d7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        };
+        addManualOrder(testOrder);
+        Alert.alert("Debug Order Created", "A test order was added to the history. Scroll down to see it in the Recent Transactions log.");
+    };
+
+    const handleTestAr = () => {
+        const lat = parseFloat(arTestLoc.lat);
+        const lng = parseFloat(arTestLoc.lng);
+        if (isNaN(lat) || isNaN(lng)) {
+            Alert.alert("Error", "Invalid coordinates");
+            return;
+        }
+        setIsArTestVisible(false);
+        navigation.navigate('ARScreen', {
+            restaurant: {
+                id: 'test_ar',
+                name: arTestLoc.name,
+                location: { latitude: lat, longitude: lng },
+                description: 'Manual AR Test Location'
+            }
+        });
     };
 
     const handleGenerateReport = async () => {
@@ -291,7 +365,7 @@ export default function OwnerDashboardScreen({ navigation }) {
 
     const handleLogout = async () => {
         await logout();
-        navigation.replace('Auth');
+        // navigation.replace('Auth'); // State change will handle this automatically
     };
 
     const primaryColor = theme?.colors?.primary || '#F59E0B';
@@ -342,12 +416,42 @@ export default function OwnerDashboardScreen({ navigation }) {
                     <Text style={[styles.statValueBig, { color: textColor }]}>Rs {totalRevenue.toFixed(2)}</Text>
                     <View style={styles.revFooter}>
                         <Text style={{ fontSize: 11, color: '#10B981' }}>• Confirmed Orders Only</Text>
-                        <TouchableOpacity style={[styles.downloadBtn, { backgroundColor: primaryColor }]} onPress={handleGenerateReport}>
-                            <Ionicons name="download-outline" size={16} color="#fff" />
-                            <Text style={styles.downloadBtnText}>PDF Report</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row' }}>
+                            <TouchableOpacity style={[styles.downloadBtn, { backgroundColor: primaryColor }]} onPress={handleGenerateReport}>
+                                <Ionicons name="download-outline" size={16} color="#fff" />
+                                <Text style={styles.downloadBtnText}>PDF Report</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </TouchableOpacity>
+
+                {/* Bank-style Transaction Log */}
+                <View style={[styles.transactionContainer, { backgroundColor: cardBg, marginTop: 15 }]}>
+                    <View style={styles.transHeader}>
+                        <Text style={[styles.transTitle, { color: textColor }]}>Recent Transactions</Text>
+                        <Ionicons name="receipt-outline" size={18} color={subTextColor} />
+                    </View>
+                    {filteredTransactions.slice(0, 10).map((order, idx) => (
+                        <View key={order.id} style={[styles.transRow, { borderBottomWidth: idx === 9 ? 0 : 1, borderBottomColor: borderColor }]}>
+                            <View style={styles.transIconCircle}>
+                                <Ionicons name="location-outline" size={20} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                <Text style={[styles.transOrderName, { color: textColor }]}>{order.restaurantName} #{order.id.slice(-4)}</Text>
+                                <Text style={[styles.transDate, { color: subTextColor }]}>
+                                    {new Date(order.date).toLocaleDateString()} • {new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                                <Text style={[styles.transDate, { color: subTextColor, fontSize: 10, marginTop: 2 }]}>
+                                    📍 {order.location?.latitude ? `${order.location.latitude.toFixed(4)}, ${order.location.longitude.toFixed(4)}` : 'Location N/A'}
+                                </Text>
+                            </View>
+                            <Text style={[styles.transAmount, { color: '#10B981' }]}>+Rs {order.total.toFixed(0)}</Text>
+                        </View>
+                    ))}
+                    {filteredTransactions.length === 0 && (
+                        <Text style={[styles.emptyTrans, { color: subTextColor }]}>No transactions yet.</Text>
+                    )}
+                </View>
             </View>
 
             {/* Incoming Payments Section */}
@@ -379,7 +483,7 @@ export default function OwnerDashboardScreen({ navigation }) {
                                 <TouchableOpacity onPress={() => handleOrderStatus(order.id, 'Confirmed')} style={[styles.quickBtn, { backgroundColor: '#10B981' }]}>
                                     <Ionicons name="checkmark" size={18} color="#fff" />
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleOrderStatus(order.id, 'Payment Rejected')} style={[styles.quickBtn, { backgroundColor: '#EF4444' }]}>
+                                <TouchableOpacity onPress={() => handleOrderStatus(order.id, 'Payment Rejected')} style={[styles.quickBtn, { backgroundColor: '#F97316' }]}>
                                     <Ionicons name="close" size={18} color="#fff" />
                                 </TouchableOpacity>
                             </View>
@@ -442,10 +546,17 @@ export default function OwnerDashboardScreen({ navigation }) {
                 </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.actionCard, { backgroundColor: cardBg }]} onPress={handleDeleteRestaurant}>
-                    <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2' }]}>
-                        <Ionicons name="trash" size={32} color="#EF4444" />
+                    <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(249, 115, 22, 0.2)' : '#FFEDD5' }]}>
+                        <Ionicons name="trash" size={32} color="#F97316" />
                     </View>
                     <Text style={[styles.actionText, { color: textColor }]}>Delete Rest.</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.actionCard, { backgroundColor: cardBg }]} onPress={() => setIsArTestVisible(true)}>
+                    <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE' }]}>
+                        <Ionicons name="cube" size={32} color="#8B5CF6" />
+                    </View>
+                    <Text style={[styles.actionText, { color: textColor }]}>Test AR</Text>
                 </TouchableOpacity>
             </View>
 
@@ -558,25 +669,63 @@ export default function OwnerDashboardScreen({ navigation }) {
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView style={{ maxHeight: 300 }}>
-                            {restaurants.map(r => (
-                                <TouchableOpacity
-                                    key={r.id}
-                                    style={[styles.pickerItem, { borderBottomColor: borderColor }]}
-                                    onPress={() => {
-                                        setRevenueResId(r.id);
-                                        setIsResPickerVisible(false);
-                                    }}
-                                >
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[styles.pickerItemText, { color: textColor }]}>{r.name}</Text>
-                                        <Text style={{ fontSize: 11, color: subTextColor }}>{r.address}</Text>
+                        <ScrollView style={{ maxHeight: 400 }}>
+                            <TouchableOpacity
+                                style={[styles.pickerItem, { borderBottomColor: borderColor }]}
+                                onPress={() => {
+                                    setRevenueResId('all');
+                                    setIsResPickerVisible(false);
+                                }}
+                            >
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.pickerItemText, { color: textColor, fontWeight: 'bold' }]}>All Restaurants</Text>
+                                    <Text style={{ fontSize: 11, color: subTextColor }}>Global Revenue</Text>
+                                </View>
+                                {revenueResId === 'all' && <Ionicons name="checkmark-circle" size={20} color={primaryColor} />}
+                            </TouchableOpacity>
+
+                            {/* Group by Brands */}
+                            {Array.from(new Set(restaurants.map(r => r.brand || r.name))).map(brand => {
+                                const brandLocs = restaurants.filter(r => (r.brand === brand) || (!r.brand && r.name === brand));
+                                const isBrandSelected = revenueResId === `BRAND_${brand}`;
+
+                                return (
+                                    <View key={brand} style={{ marginTop: 10 }}>
+                                        {/* Brand Header / Select All for Brand */}
+                                        <TouchableOpacity
+                                            style={[styles.pickerItem, { borderBottomColor: borderColor, backgroundColor: isDarkMode ? '#374151' : '#F3F4F6', paddingLeft: 10 }]}
+                                            onPress={() => {
+                                                setRevenueResId(`BRAND_${brand}`);
+                                                setIsResPickerVisible(false);
+                                            }}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.pickerItemText, { color: textColor, fontWeight: 'bold' }]}>{brand}</Text>
+                                                <Text style={{ fontSize: 11, color: subTextColor }}>All {brand} Locations</Text>
+                                            </View>
+                                            {isBrandSelected && <Ionicons name="checkmark-circle" size={20} color={primaryColor} />}
+                                        </TouchableOpacity>
+
+                                        {/* Individual Locations */}
+                                        {brandLocs.map(r => (
+                                            <TouchableOpacity
+                                                key={r.id}
+                                                style={[styles.pickerItem, { borderBottomColor: borderColor, paddingLeft: 30 }]}
+                                                onPress={() => {
+                                                    setRevenueResId(r.id);
+                                                    setIsResPickerVisible(false);
+                                                }}
+                                            >
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.pickerItemText, { color: textColor }]}>{r.name}</Text>
+                                                    <Text style={{ fontSize: 11, color: subTextColor }}>{r.address}</Text>
+                                                </View>
+                                                {revenueResId === r.id && <Ionicons name="checkmark-circle" size={20} color={primaryColor} />}
+                                            </TouchableOpacity>
+                                        ))}
                                     </View>
-                                    {revenueResId === r.id && (
-                                        <Ionicons name="checkmark-circle" size={20} color={primaryColor} />
-                                    )}
-                                </TouchableOpacity>
-                            ))}
+                                );
+                            })}
                         </ScrollView>
                         <View style={{ height: 20 }} />
                     </View>
@@ -601,6 +750,49 @@ export default function OwnerDashboardScreen({ navigation }) {
                                 style={{ flex: 1, backgroundColor: '#fff' }}
                             />
                         </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* AR Test Modal */}
+            <Modal visible={isArTestVisible} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>AR Location Test</Text>
+                            <TouchableOpacity onPress={() => setIsArTestVisible(false)}>
+                                <Ionicons name="close" size={24} color={textColor} />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={{ color: subTextColor, marginBottom: 15 }}>Enter coordinates to test AR view.</Text>
+
+                        <TextInput
+                            placeholder="Place Name"
+                            placeholderTextColor={subTextColor}
+                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
+                            value={arTestLoc.name}
+                            onChangeText={t => setArTestLoc({ ...arTestLoc, name: t })}
+                        />
+                        <TextInput
+                            placeholder="Latitude (e.g. -20.24)"
+                            placeholderTextColor={subTextColor}
+                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
+                            value={arTestLoc.lat}
+                            keyboardType="default" // Allow negative signs and dots freely
+                            onChangeText={t => setArTestLoc({ ...arTestLoc, lat: t })}
+                        />
+                        <TextInput
+                            placeholder="Longitude (e.g. 57.48)"
+                            placeholderTextColor={subTextColor}
+                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
+                            value={arTestLoc.lng}
+                            keyboardType="default" // Allow negative signs and dots freely
+                            onChangeText={t => setArTestLoc({ ...arTestLoc, lng: t })}
+                        />
+
+                        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#8B5CF6' }]} onPress={handleTestAr}>
+                            <Text style={styles.saveBtnText}>Launch AR View</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
@@ -763,6 +955,20 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginLeft: 4
     },
+    testOrderBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#CC0000',
+    },
+    testOrderBtnText: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginLeft: 4
+    },
     itemsBrief: {
         marginVertical: 10,
         height: 35,
@@ -787,4 +993,50 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         backgroundColor: 'rgba(245, 158, 11, 0.1)',
     },
+    transactionContainer: {
+        borderRadius: 20,
+        padding: 18,
+        elevation: 2,
+        shadowOpacity: 0.1,
+    },
+    transHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    transTitle: {
+        fontSize: 15,
+        fontWeight: 'bold',
+    },
+    transRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+    },
+    transIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    transOrderName: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    transDate: {
+        fontSize: 11,
+        marginTop: 2,
+    },
+    transAmount: {
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    emptyTrans: {
+        textAlign: 'center',
+        fontSize: 13,
+        paddingVertical: 10,
+    }
 });
