@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
     marginLeft: 4,
-    marginTop: 8
+    marginTop: 20
   },
   glassContainer: {
     borderRadius: 20,

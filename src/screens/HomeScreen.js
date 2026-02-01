@@ -75,6 +75,10 @@ export default function HomeScreen({ navigation }) {
 
   const [activeCategory, setActiveCategory] = useState(null);
 
+  const activeOrderCount = useMemo(() => orders.filter(o => o.status !== 'Picked Up').length, [orders]);
+  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Picked Up'), [orders]);
+  const latestOrder = useMemo(() => activeOrders.length > 0 ? activeOrders[0] : null, [activeOrders]);
+
   const toggleNotifications = (show) => {
     if (show) {
       setShowNotifications(true);
@@ -110,31 +114,24 @@ export default function HomeScreen({ navigation }) {
   }, [searchQuery, restaurants, activeCategory]);
 
   // Fixed Carousel Auto-scroll Logic
+  // Simplified Carousel Auto-scroll Logic
   useEffect(() => {
     const timer = setInterval(() => {
-      if (promoListRef.current) {
-        let nextIndex = currentPromoIndexRef.current + scrollDirection;
-
+      if (promoListRef.current && promotions.length > 0) {
+        let nextIndex = currentPromoIndexRef.current + 1;
         if (nextIndex >= promotions.length) {
-          nextIndex = promotions.length - 2;
-          setScrollDirection(-1);
-        } else if (nextIndex < 0) {
-          nextIndex = 1;
-          setScrollDirection(1);
+          nextIndex = 0; // Loop back to start
         }
-
         currentPromoIndexRef.current = nextIndex;
         setCurrentPromoIndex(nextIndex);
-
         promoListRef.current.scrollToIndex({
           index: nextIndex,
           animated: true,
         });
       }
-    }, 3500);
-
+    }, 4000);
     return () => clearInterval(timer);
-  }, [scrollDirection, promotions.length]);
+  }, [promotions.length]);
 
   const handleRestaurantPress = (restaurant) => {
     navigation.navigate('RestaurantDetails', { restaurant });
@@ -150,9 +147,6 @@ export default function HomeScreen({ navigation }) {
   }));
 
   const NotificationPopup = () => {
-    const activeOrders = orders.filter(o => o.status !== 'Picked Up');
-    const latestOrder = activeOrders.length > 0 ? activeOrders[0] : null;
-
     return (
       <Modal
         visible={showNotifications}
@@ -197,7 +191,7 @@ export default function HomeScreen({ navigation }) {
 
                     <View style={styles.notiDetails}>
                       <Text style={[styles.notiStatus, { color: theme.colors.primary }]}>{latestOrder.status}</Text>
-                      <Text style={[styles.notiInfo, { color: theme.colors.text }]}>{t('order_is')} {latestOrder.restaurantName} is being {latestOrder.status.toLowerCase()}.</Text>
+                      <Text style={[styles.notiInfo, { color: theme.colors.text }]}>Your order from {latestOrder.restaurantName} is being {latestOrder.status.toLowerCase()}.</Text>
 
                       <View style={[styles.notiDivider, { backgroundColor: theme.colors.border }]} />
 
@@ -213,15 +207,49 @@ export default function HomeScreen({ navigation }) {
                     <TouchableOpacity
                       style={[styles.notiAction, { backgroundColor: theme.colors.primary }]}
                       onPress={() => {
-                        const restaurant = restaurants.find(r => r.id === latestOrder.restaurantId);
+                        // Robust lookup: try ID first, then name fallback
+                        let restaurant = restaurants.find(r => r.id === latestOrder.restaurantId);
+                        if (!restaurant) {
+                          restaurant = restaurants.find(r => r.name === latestOrder.restaurantName);
+                        }
+
+                        // If still not found, search by Brand substring (e.g. 'KFC')
+                        if (!restaurant && latestOrder.restaurantName) {
+                          const brand = latestOrder.restaurantName.split(' ')[0];
+                          restaurant = restaurants.find(r => r.brand === brand || r.name.includes(brand));
+                        }
+
                         toggleNotifications(false);
+
+                        // Fallback Hardcoded Coordinates for accuracy
+                        let targetLoc = restaurant ? restaurant.location : null;
+
+                        if (!targetLoc && latestOrder.restaurantName) {
+                          const name = latestOrder.restaurantName.toLowerCase();
+                          if (name.includes('bagatelle')) targetLoc = { latitude: -20.22427, longitude: 57.49660 };
+                          else if (name.includes('port louis')) targetLoc = { latitude: -20.16325, longitude: 57.49749 };
+                          else if (name.includes('curepipe')) targetLoc = { latitude: -20.32165, longitude: 57.52648 };
+                          else if (name.includes('grand baie')) targetLoc = { latitude: -20.02163, longitude: 57.57792 };
+                          else if (name.includes('phoenix')) targetLoc = { latitude: -20.27648, longitude: 57.50576 };
+                        }
+
+                        if (!targetLoc) targetLoc = latestOrder.location; // Final fallback
+
                         setTimeout(() => {
                           setActiveTab('Map');
-                          navigation.navigate('Map', { restaurant: restaurant });
+                          navigation.navigate('Map', {
+                            restaurant: restaurant || {
+                              name: latestOrder.restaurantName,
+                              location: targetLoc,
+                              description: 'Order Pickup Location',
+                              address: 'Mauritius'
+                            },
+                            location: targetLoc
+                          });
                         }, 350);
                       }}
                     >
-                      <Text style={styles.notiActionText}>{t('show_location') || 'Show Location'}</Text>
+                      <Text style={styles.notiActionText}>Show Location</Text>
                       <Ionicons name="location-outline" size={16} color="#fff" />
                     </TouchableOpacity>
                   </View>
@@ -266,7 +294,7 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.orderRestaurant, { color: theme.colors.text }]}>{latestOrder.restaurantName}</Text>
             {/* Cleaned up text, removed potential underscore artifacts */}
             <Text style={[styles.orderItems, { color: theme.colors.textLight }]}>
-              {latestOrder.location?.latitude ? 'Track Location' : 'Order Placed'} • {latestOrder.items.length} items
+              {latestOrder.status === 'Picked Up' ? 'Order Completed' : 'Track Order'} • {latestOrder.items.length} items
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
@@ -315,6 +343,7 @@ export default function HomeScreen({ navigation }) {
       data={promotions}
       keyExtractor={(item) => item.id}
       horizontal
+      scrollEnabled={true}
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.promoCarousel}
       decelerationRate="fast"
@@ -379,7 +408,13 @@ export default function HomeScreen({ navigation }) {
                 <Text style={[styles.greeting, { color: theme.colors.textLight }]}>Delivering to</Text>
                 <Ionicons name="caret-down" size={12} color={theme.colors.textLight} style={{ marginLeft: 4 }} />
               </View>
-              <Text style={[styles.locationTextHeader, { color: theme.colors.text }]}>{userAddress}</Text>
+              <Text style={[styles.locationTextHeader, { color: theme.colors.text }]}>
+                {userAddress ? (
+                  userAddress.includes(',')
+                    ? userAddress.split(',').slice(0, 2).join(',').trim()
+                    : userAddress
+                ) : 'Location not set'}
+              </Text>
             </View>
             <View style={{ flexDirection: 'row' }}>
               <TouchableOpacity
@@ -387,8 +422,8 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => toggleNotifications(true)}
               >
                 <Ionicons name="notifications-outline" size={22} color={theme.colors.text} />
-                {orders.filter(o => o.status !== 'Picked Up').length > 0 && (
-                  <View style={[styles.notiBadge, { backgroundColor: theme.colors.error }]} />
+                {activeOrderCount > 0 && (
+                  <View key="notification-badge" style={[styles.notiBadge, { backgroundColor: theme.colors.error }]} />
                 )}
               </TouchableOpacity>
               <TouchableOpacity

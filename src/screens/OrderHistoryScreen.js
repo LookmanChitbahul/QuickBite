@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, FlatList, TouchableOpacity, Image, StatusBar, A
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import QRCode from 'react-native-qrcode-svg';
 
 export default function OrderHistoryScreen({ navigation }) {
     const { orders, theme, isDarkMode, t } = useApp();
@@ -68,6 +69,28 @@ export default function OrderHistoryScreen({ navigation }) {
                 <View style={styles.cardFooter}>
                     <Text style={[styles.totalText, { color: theme.colors.text }]}>{t('total')}: Rs {item.total.toFixed(2)}</Text>
                 </View>
+
+                {item.paymentProof && (
+                    <View style={styles.proofSection}>
+                        <Text style={[styles.proofTitle, { color: theme.colors.textLight }]}>Payment Verification Photo:</Text>
+                        <Image source={{ uri: item.paymentProof }} style={styles.proofImage} resizeMode="cover" />
+                    </View>
+                )}
+
+                {!isCompleted && (
+                    <View style={styles.qrSection}>
+                        <Text style={[styles.qrTitle, { color: theme.colors.text }]}>Pickup QR Code</Text>
+                        <View style={styles.qrWrapper}>
+                            <QRCode
+                                value={JSON.stringify({ orderId: item.id, restaurantId: item.restaurantId })}
+                                size={140}
+                                color="black"
+                                backgroundColor="white"
+                            />
+                        </View>
+                        <Text style={[styles.qrHint, { color: theme.colors.textLight }]}>Show this to the restaurant staff to confirm pickup</Text>
+                    </View>
+                )}
             </View>
         );
     };
@@ -167,4 +190,49 @@ const styles = StyleSheet.create({
     emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
     emptyTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 20 },
     emptySubtitle: { textAlign: 'center', marginTop: 10, fontSize: 16, lineHeight: 24, marginBottom: 30 },
+    qrSection: {
+        marginTop: 15,
+        alignItems: 'center',
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)'
+    },
+    qrTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginBottom: 10
+    },
+    qrWrapper: {
+        padding: 10,
+        backgroundColor: 'white',
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2
+    },
+    qrHint: {
+        fontSize: 11,
+        marginTop: 8,
+        fontStyle: 'italic',
+        textAlign: 'center'
+    },
+    proofSection: {
+        marginTop: 15,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)'
+    },
+    proofTitle: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginBottom: 8
+    },
+    proofImage: {
+        width: '100%',
+        height: 150,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6'
+    }
 });

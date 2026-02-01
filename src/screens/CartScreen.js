@@ -163,6 +163,9 @@ export default function CartScreen({ navigation }) {
                             <Text style={[styles.name, { color: isDarkMode ? '#FFFFFF' : '#1F2937' }]}>{item.name}</Text>
                             <Text style={[styles.price, { color: isDarkMode ? '#9CA3AF' : '#6B7280' }]}>Rs {item.price.toFixed(2)}</Text>
                         </View>
+                        <TouchableOpacity onPress={() => removeFromCart(item.id)} style={styles.trashBtn}>
+                            <Ionicons name="trash-outline" size={20} color={theme.colors.muted} />
+                        </TouchableOpacity>
                         <Image source={{ uri: item.image }} style={styles.image} />
                     </View>
                 )}
@@ -476,5 +479,9 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
     outletItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1 },
     outletName: { fontSize: 16 },
-    outletAddr: { fontSize: 12, marginTop: 2 }
+    outletAddr: { fontSize: 12, marginTop: 2 },
+    trashBtn: {
+        padding: 8,
+        marginHorizontal: 5
+    }
 });

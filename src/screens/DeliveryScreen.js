@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, StatusBar, Text, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, StatusBar, Text, Dimensions, Linking, Platform, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker, UrlTile } from 'react-native-maps';
 import { useApp } from '../context/AppContext';
 import { darkMapStyle, deuteranopiaMapStyle, protanopiaMapStyle, tritanopiaMapStyle } from '../data/mapStyles';
 
@@ -41,70 +41,59 @@ export default function DeliveryScreen({ navigation, route }) {
     const { isDarkMode, colorBlindType, restaurantLocation, restaurants, ownerRestaurantId, userLocation, theme } = useApp();
     const textColor = isDarkMode ? '#FFFFFF' : '#111827';
     const subTextColor = isDarkMode ? '#9CA3AF' : '#4B5563';
+
     const mapRef = useRef(null);
+    const markerRefs = useRef({});
+
+    // UI States
+    const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+    const [is3DMode, setIs3DMode] = useState(false); // Toggle for "Tilt Mode"
+    const slideAnim = useRef(new Animated.Value(300)).current; // For bottom sheet animation
 
     const myRestaurant = useMemo(() => restaurants.find(r => r.id === ownerRestaurantId), [restaurants, ownerRestaurantId]);
     const location = useMemo(() => route?.params?.location || restaurantLocation || DEFAULT_LOC, [route?.params?.location, restaurantLocation]);
-    const restaurantName = useMemo(() => route?.params?.restaurantName || myRestaurant?.name || "QuickBite Restaurant", [route?.params?.restaurantName, myRestaurant]);
-    const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
-    // Dynamic initial region: prioritize Order Location > Route Param > User Location > Default
-    const initialRegion = useMemo(() => {
-        const baseLoc = route?.params?.orderLocation || route?.params?.location || userLocation || restaurantLocation || DEFAULT_LOC;
-        return {
-            latitude: baseLoc.latitude,
-            longitude: baseLoc.longitude,
-            latitudeDelta: 0.015,
-            longitudeDelta: 0.015,
-        };
-    }, [route?.params?.orderLocation, route?.params?.location, userLocation, restaurantLocation]);
-
+    // Animation for Bottom Sheet
     useEffect(() => {
-        const timer = setTimeout(() => setTracksViewChanges(false), 500);
-        return () => clearTimeout(timer);
-    }, [location]);
-
-    // Animate to user location when it becomes available (and if no restaurant is being viewed)
-    // Animate to target location when it becomes available
-    useEffect(() => {
-        const target = route?.params?.orderLocation || route?.params?.location;
-        if (target && mapRef.current) {
-            mapRef.current.animateToRegion({
-                latitude: target.latitude,
-                longitude: target.longitude,
-                latitudeDelta: 0.005, // Zoom in closer for specific targets
-                longitudeDelta: 0.005,
-            }, 1000);
-        } else if (userLocation && mapRef.current) {
-            mapRef.current.animateToRegion({
-                latitude: userLocation.latitude,
-                longitude: userLocation.longitude,
-                latitudeDelta: 0.015,
-                longitudeDelta: 0.015,
-            }, 1000);
+        if (selectedRestaurant) {
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                friction: 8,
+            }).start();
+        } else {
+            Animated.timing(slideAnim, {
+                toValue: 300,
+                duration: 200,
+                useNativeDriver: true,
+            }).start();
         }
-    }, [userLocation, route?.params?.location, route?.params?.orderLocation]);
+    }, [selectedRestaurant]);
+
+    // Focus Effects
+    useEffect(() => {
+        const restaurant = route?.params?.restaurant;
+        if (restaurant) {
+            setSelectedRestaurant(restaurant);
+            const target = restaurant.location || location;
+
+            mapRef.current?.animateCamera({
+                center: target,
+                zoom: 17,
+                pitch: 45, // Auto-tilt slightly for better view
+                heading: 0
+            }, { duration: 1000 });
+        }
+    }, [route?.params?.restaurant]);
 
     const centerOnUser = () => {
         if (userLocation && mapRef.current) {
-            mapRef.current.animateToRegion({
-                latitude: userLocation.latitude,
-                longitude: userLocation.longitude,
-                latitudeDelta: 0.015,
-                longitudeDelta: 0.015,
-            }, 1000);
+            mapRef.current.animateCamera({
+                center: userLocation,
+                zoom: 15,
+            }, { duration: 1000 });
         }
     };
-
-    const getMapStyle = () => {
-        if (colorBlindType === 'deuteranopia') return deuteranopiaMapStyle;
-        if (colorBlindType === 'protanopia') return protanopiaMapStyle;
-        if (colorBlindType === 'tritanopia') return tritanopiaMapStyle;
-        if (isDarkMode) return darkMapStyle;
-        return [];
-    };
-
-    const markerColor = colorBlindType !== 'none' ? '#0072B2' : '#EF4444'; // Use Okabe-Ito Blue for accessibility
 
     return (
         <View style={styles.container}>
@@ -113,16 +102,28 @@ export default function DeliveryScreen({ navigation, route }) {
             <MapView
                 ref={mapRef}
                 style={styles.map}
-                customMapStyle={getMapStyle()}
-                initialRegion={initialRegion}
+                mapType="none"
+                initialRegion={{
+                    ...DEFAULT_LOC,
+                    latitudeDelta: 0.1,
+                    longitudeDelta: 0.1,
+                }}
+                pitchEnabled={true}
+                rotateEnabled={true}
+                scrollEnabled={!is3DMode} // In 3D Mode, we might want to prioritize pitch/rotate gestures? 
+            // Actually, standard usage allows both.
+            // But user asked for a specific toggle. 
+            // Let's interpret "Tilt Mode" as: Locking pan to prevent accidental movement while tilting?
+            // Or better: Re-enable scroll always, just give them the freedom.
             >
+                <UrlTile
+                    urlTemplate={`https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAPTILER_API_KEY}`}
+                    zIndex={-1}
+                />
+
                 {/* User Location Marker */}
                 {userLocation && (
-                    <Marker
-                        coordinate={userLocation}
-                        title="You"
-                        description="Your current position"
-                    >
+                    <Marker coordinate={userLocation} title="You" anchor={{ x: 0.5, y: 0.5 }} zIndex={999}>
                         <View style={styles.userMarkerWrapper}>
                             <View style={styles.userMarkerPulse} />
                             <View style={styles.userMarkerInner} />
@@ -130,53 +131,19 @@ export default function DeliveryScreen({ navigation, route }) {
                     </Marker>
                 )}
 
-                {/* All Restaurant Markers */}
+                {/* Restaurant Markers */}
                 {restaurants.map((rest) => (
                     <Marker
                         key={rest.id}
                         coordinate={rest.location || DEFAULT_LOC}
-                        anchor={{ x: 0.5, y: 1 }}
-                        tracksViewChanges={tracksViewChanges}
+                        style={{ zIndex: selectedRestaurant?.id === rest.id ? 10 : 1 }}
+                        onPress={() => setSelectedRestaurant(rest)}
                     >
-                        <View style={styles.finalMarkerWrapper}>
-                            <View style={styles.pinBodyWithDot}>
-                                <Ionicons name="fast-food" size={44} color={theme.colors.primary} />
-                                <View style={styles.dotInsidePin} />
-                            </View>
-                        </View>
-                        <Callout
-                            onPress={() => {
-                                // Due to iOS/Android differences in Callout interactivity, 
-                                // it's often safer to rely on the Callout's generic press 
-                                // or assume the user wants to Order from here.
-                                // But we have specific buttons. 
-                                // If standard onPress captures everything, we might need a workaround or just navigate to Details which has AR button too.
-                                // For now, we'll try to support interactions.
-                            }}
-                            tooltip
-                        >
-                            <View style={[styles.calloutContainer, { backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF', minHeight: 120 }]}>
-                                <Text style={[styles.calloutTitle, { color: textColor }]}>{rest.name}</Text>
-                                <Text style={[styles.calloutAddress, { color: subTextColor }]}>{rest.address}</Text>
-                                <Text style={[styles.calloutDesc, { color: subTextColor }]}>{rest.description || "Best food in town!"}</Text>
-
-                                <View style={styles.calloutBtnRow}>
-                                    <TouchableOpacity
-                                        style={[styles.calloutBtn, { backgroundColor: theme.colors.primary }]}
-                                        onPress={() => navigation.navigate('RestaurantDetails', { restaurant: rest })}
-                                    >
-                                        <Text style={styles.calloutBtnText}>Order Here</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[styles.calloutBtn, { backgroundColor: isDarkMode ? '#374151' : '#F3F4F6', marginLeft: 8 }]}
-                                        onPress={() => navigation.navigate('ARScreen', { restaurant: rest })}
-                                    >
-                                        <Text style={[styles.calloutBtnText, { color: textColor }]}>AR View</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </Callout>
+                        <Image
+                            source={require('../assets/custom_marker.png')}
+                            style={{ width: 45, height: 45 }}
+                            resizeMode="contain"
+                        />
                     </Marker>
                 ))}
 
@@ -185,32 +152,13 @@ export default function DeliveryScreen({ navigation, route }) {
                     <Marker
                         key={place.id}
                         coordinate={place.location}
-                        anchor={{ x: 0.5, y: 1 }}
-                        tracksViewChanges={tracksViewChanges}
+                        onPress={() => setSelectedRestaurant(place)}
                     >
-                        <View style={styles.finalMarkerWrapper}>
-                            <View style={styles.pinBodyWithDot}>
-                                <Ionicons
-                                    name={place.type === 'police' ? "shield" : "medkit"}
-                                    size={40}
-                                    color={place.type === 'police' ? "#3B82F6" : "#EF4444"}
-                                />
-                                <View style={styles.dotInsidePin} />
-                            </View>
-                        </View>
-                        <Callout tooltip>
-                            <View style={[styles.calloutContainer, { backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF' }]}>
-                                <Text style={[styles.calloutTitle, { color: textColor }]}>{place.name}</Text>
-                                <Text style={[styles.calloutAddress, { color: subTextColor }]}>{place.address}</Text>
-                                <Text style={[styles.calloutDesc, { color: subTextColor }]}>{place.description}</Text>
-                                <TouchableOpacity
-                                    style={[styles.calloutBtn, { backgroundColor: isDarkMode ? '#374151' : '#F3F4F6', marginTop: 8 }]}
-                                    onPress={() => navigation.navigate('ARScreen', { restaurant: place })}
-                                >
-                                    <Text style={[styles.calloutBtnText, { color: textColor }]}>AR View</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </Callout>
+                        <Ionicons
+                            name={place.type === 'police' ? "shield" : "medkit"}
+                            size={35}
+                            color={place.type === 'police' ? "#3B82F6" : "#EF4444"}
+                        />
                     </Marker>
                 ))}
             </MapView>
@@ -222,15 +170,95 @@ export default function DeliveryScreen({ navigation, route }) {
                 <Ionicons name="arrow-back" size={24} color={isDarkMode ? '#FFFFFF' : '#111827'} />
             </TouchableOpacity>
 
-            {/* Center on Me Button */}
-            {userLocation && (
+            {/* Map Controls */}
+            <View style={styles.mapControls}>
+                {/* 3D Tilt Toggle - Helps users who struggle with gesture */}
                 <TouchableOpacity
-                    style={[styles.centerOnMeBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF' }]}
-                    onPress={centerOnUser}
+                    style={[styles.controlBtn, { backgroundColor: is3DMode ? theme.colors.primary : (isDarkMode ? '#1F2937' : '#FFFFFF'), marginBottom: 12 }]}
+                    onPress={() => {
+                        setIs3DMode(!is3DMode);
+                        mapRef.current?.animateCamera({ pitch: is3DMode ? 0 : 45 }, { duration: 500 });
+                    }}
                 >
-                    <Ionicons name="locate" size={24} color={theme.colors.primary} />
+                    <Ionicons name="cube-outline" size={24} color={is3DMode ? '#FFF' : theme.colors.primary} />
                 </TouchableOpacity>
-            )}
+
+                {userLocation && (
+                    <TouchableOpacity
+                        style={[styles.controlBtn, { backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF' }]}
+                        onPress={centerOnUser}
+                    >
+                        <Ionicons name="locate" size={24} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Restaurant Detail Bottom Sheet */}
+            <Animated.View
+                style={[
+                    styles.bottomSheet,
+                    {
+                        backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+                        transform: [{ translateY: slideAnim }]
+                    }
+                ]}
+            >
+                {selectedRestaurant && (
+                    <View>
+                        <View style={styles.sheetHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.sheetTitle, { color: textColor }]}>{selectedRestaurant.name}</Text>
+                                <Text style={[styles.sheetSubtitle, { color: subTextColor }]}>{selectedRestaurant.address}</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setSelectedRestaurant(null)}>
+                                <Ionicons name="close-circle" size={28} color={subTextColor} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={[styles.sheetDesc, { color: subTextColor }]}>
+                            {selectedRestaurant.description || "Tap for more details."}
+                        </Text>
+
+                        {/* Action Buttons */}
+                        <View style={styles.actionRow}>
+                            {/* Order Button - Only for restaurants */}
+                            {!selectedRestaurant.type && (
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, { backgroundColor: theme.colors.primary, flex: 2 }]}
+                                    onPress={() => navigation.navigate('RestaurantDetails', { restaurant: selectedRestaurant })}
+                                >
+                                    <Text style={styles.actionBtnText}>Order Now</Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* AR Button */}
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: isDarkMode ? '#374151' : '#F3F4F6', flex: 1, marginHorizontal: 8 }]}
+                                onPress={() => navigation.navigate('ARScreen', { restaurant: selectedRestaurant })}
+                            >
+                                <Ionicons name="scan-outline" size={18} color={textColor} style={{ marginRight: 5 }} />
+                                <Text style={[styles.actionBtnText, { color: textColor }]}>AR</Text>
+                            </TouchableOpacity>
+
+                            {/* Directions Button */}
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: '#10B981', flex: 1 }]}
+                                onPress={() => {
+                                    const { latitude, longitude } = selectedRestaurant.location;
+                                    const label = encodeURIComponent(selectedRestaurant.name);
+                                    const scheme = Platform.OS === 'ios'
+                                        ? `maps:0,0?q=${label}@${latitude},${longitude}`
+                                        : `geo:0,0?q=${latitude},${longitude}(${label})`;
+                                    Linking.openURL(scheme);
+                                }}
+                            >
+                                <Ionicons name="navigate-outline" size={18} color="#FFF" style={{ marginRight: 5 }} />
+                                <Text style={styles.actionBtnText}>Go</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+            </Animated.View>
         </View>
     );
 }
@@ -253,61 +281,17 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
-        shadowRadius: 5,
         elevation: 5,
         zIndex: 100,
     },
-    finalMarkerWrapper: {
-        alignItems: 'center',
-        padding: 10,
-    },
-    pureTextName: {
-        fontSize: 14,
-        fontWeight: '900',
-        color: '#EF4444',
-        marginBottom: -10, // Overlap slightly for cohesive look
-        zIndex: 10,
-        textShadowColor: '#fff',
-        textShadowOffset: { width: 1, height: 1 },
-        textShadowRadius: 1,
-    },
-    pinBodyWithDot: {
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    dotInsidePin: {
+    mapControls: {
         position: 'absolute',
-        top: 10, // Center of the location icon's circle
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        backgroundColor: '#FFFFFF',
-    },
-    userMarkerWrapper: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 30,
-        height: 30,
-    },
-    userMarkerPulse: {
-        position: 'absolute',
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: 'rgba(59, 130, 246, 0.3)',
-    },
-    userMarkerInner: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#3B82F6',
-        borderWidth: 2,
-        borderColor: '#FFFFFF',
-    },
-    centerOnMeBtn: {
-        position: 'absolute',
-        bottom: 100,
+        bottom: 220, // Moved up to make room for bottom sheet
         right: 20,
+        zIndex: 100,
+        alignItems: 'center'
+    },
+    controlBtn: {
         width: 50,
         height: 50,
         borderRadius: 25,
@@ -316,50 +300,69 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
-        shadowRadius: 5,
         elevation: 5,
-        zIndex: 100,
     },
-    calloutContainer: {
-        width: 220,
-        padding: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
+    // Markers
+    userMarkerWrapper: {
+        alignItems: 'center', justifyContent: 'center', width: 30, height: 30,
     },
-    calloutTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        textAlign: 'center',
+    userMarkerPulse: {
+        position: 'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(59, 130, 246, 0.3)',
     },
-    calloutAddress: {
-        fontSize: 10,
-        textAlign: 'center',
-        marginTop: 2,
-        marginBottom: 8,
+    userMarkerInner: {
+        width: 12, height: 12, borderRadius: 6, backgroundColor: '#3B82F6', borderWidth: 2, borderColor: '#FFFFFF',
     },
-    calloutDesc: {
-        fontSize: 11,
-        textAlign: 'center',
-        marginBottom: 10,
-        fontStyle: 'italic'
+    // Bottom Sheet
+    bottomSheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        paddingBottom: 40,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 20,
+        zIndex: 200,
     },
-    calloutBtnRow: {
+    sheetHeader: {
         flexDirection: 'row',
-        marginTop: 5,
-        justifyContent: 'center'
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 12,
     },
-    calloutBtn: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 15,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    calloutBtnText: {
-        color: '#FFF',
-        fontSize: 10,
+    sheetTitle: {
+        fontSize: 20,
         fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    sheetSubtitle: {
+        fontSize: 14,
+        opacity: 0.8,
+    },
+    sheetDesc: {
+        fontSize: 14,
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    actionBtn: {
+        flexDirection: 'row',
+        height: 48,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    actionBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '600',
+        fontSize: 14,
     }
 });

@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, ActivityIndicator } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
 
 export default function ARScreen({ navigation, route }) {
-    const { theme } = useApp();
-    const selectedRestaurant = route?.params?.restaurant;
-
+    const { theme, restaurants } = useApp();
+    const [currentRestaurant, setCurrentRestaurant] = useState(route?.params?.restaurant);
     const [isLoading, setIsLoading] = useState(true);
 
-    if (!selectedRestaurant || !selectedRestaurant.location) {
+    if (!currentRestaurant || !currentRestaurant.location) {
         return (
             <View style={styles.center}>
                 <Text style={{ color: '#fff' }}>No location data available.</Text>
@@ -21,7 +21,7 @@ export default function ARScreen({ navigation, route }) {
         );
     }
 
-    const { latitude, longitude } = selectedRestaurant.location;
+    const { latitude, longitude } = currentRestaurant.location;
     // Attempt to use the Gemini key as a proxy for a Google Maps Key, or fallback to a known public key if possible (not recommended/possible here). 
     // Using the public URL hack for Street View which is robust without a specific restricted key.
     // The 'embed' API requires a key. The 'maps' URL is public.
@@ -57,10 +57,30 @@ export default function ARScreen({ navigation, route }) {
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <View style={styles.titleContainer}>
-                    <Text style={styles.title}>{selectedRestaurant.name}</Text>
+                    <Text style={styles.title}>{currentRestaurant.name}</Text>
                     <View style={styles.tag}>
                         <Text style={styles.tagText}>Street View</Text>
                     </View>
+                </View>
+
+                {/* Restaurant Swap Dropdown */}
+                <View style={styles.pickerWrapper}>
+                    <Picker
+                        selectedValue={currentRestaurant.id}
+                        onValueChange={(itemValue) => {
+                            const newRest = restaurants.find(r => r.id === itemValue);
+                            if (newRest) {
+                                setIsLoading(true);
+                                setCurrentRestaurant(newRest);
+                            }
+                        }}
+                        style={styles.picker}
+                        dropdownIconColor="#fff"
+                    >
+                        {restaurants.map(r => (
+                            <Picker.Item key={r.id} label={r.name} value={r.id} />
+                        ))}
+                    </Picker>
                 </View>
             </View>
 
@@ -146,5 +166,20 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         marginLeft: 8
+    },
+    pickerWrapper: {
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderRadius: 12,
+        marginLeft: 10,
+        height: 44,
+        width: 150,
+        justifyContent: 'center',
+        paddingHorizontal: 0,
+        overflow: 'hidden'
+    },
+    picker: {
+        color: '#fff',
+        width: '100%',
+        transform: [{ scale: 0.8 }]
     }
 });

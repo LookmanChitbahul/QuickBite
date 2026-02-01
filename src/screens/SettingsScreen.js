@@ -146,12 +146,12 @@ export default function SettingsScreen({ navigation }) {
           <SettingItem
             icon="document-text-outline"
             title={t('privacy_policy')}
-            onPress={() => { }}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
           />
           <SettingItem
             icon="shield-checkmark-outline"
             title={t('terms_of_service')}
-            onPress={() => { }}
+            onPress={() => navigation.navigate('TermsOfService')}
           />
         </SettingSection>
 

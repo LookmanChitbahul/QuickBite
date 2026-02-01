@@ -367,6 +367,18 @@ export const AppProvider = ({ children }) => {
 
     const removeFromCart = (itemId) => setCart((prevCart) => prevCart.filter((item) => item.id !== itemId));
 
+    const confirmPickup = async (orderId) => {
+        try {
+            const orderRef = doc(db, 'orders', orderId);
+            await setDoc(orderRef, {
+                status: 'Picked Up',
+                pickupTime: new Date().toISOString()
+            }, { merge: true });
+        } catch (e) {
+            console.error("Failed to confirm pickup", e);
+        }
+    };
+
     const updateCartQuantity = (itemId, change) => {
         setCart((prevCart) => prevCart.map(item => {
             if (item.id === itemId) {
@@ -481,7 +493,7 @@ export const AppProvider = ({ children }) => {
                 paymentMethods, updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, scheduleNotification,
                 activeTab, setActiveTab, restaurantLocation, setRestaurantLocation, language, changeLanguage, t,
                 updateOrderStatus, addRestaurant, deleteRestaurant, forgotPassword, savedAccounts, saveAccountToHistory,
-                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart
+                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart, confirmPickup
             }}
         >
             {children}

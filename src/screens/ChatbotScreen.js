@@ -289,7 +289,7 @@ export default function ChatbotScreen() {
                     <Ionicons name="chatbubble-ellipses" size={24} color={theme.colors.primary} />
                     <Text style={[styles.headerTitle, { color: theme.colors.text }]}>QuickBite AI Assistant</Text>
                 </View>
-                <Text style={[styles.headerSubtitle, { color: theme.colors.textLight }]}>Powered by GPT-4 • Your Food Expert</Text>
+                <Text style={[styles.headerSubtitle, { color: theme.colors.textLight }]}>Powered by Gemini • Your Food Expert</Text>
             </View>
 
             <ScrollView

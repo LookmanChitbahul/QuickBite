@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar, Image, Modal, TextInput, FlatList, Platform } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
@@ -22,8 +23,12 @@ export default function OwnerDashboardScreen({ navigation }) {
         updateOrderStatus,
         addRestaurant,
         deleteRestaurant,
-        addManualOrder
+        addManualOrder,
+        confirmPickup
     } = useApp();
+
+    const [scanning, setScanning] = useState(false);
+    const [permission, requestPermission] = useCameraPermissions();
 
     const [selectedProof, setSelectedProof] = useState(null);
     const [revenueResId, setRevenueResId] = useState('all'); // Default to ALL
@@ -166,6 +171,32 @@ export default function OwnerDashboardScreen({ navigation }) {
         };
         addManualOrder(testOrder);
         Alert.alert("Debug Order Created", "A test order was added to the history. Scroll down to see it in the Recent Transactions log.");
+    };
+
+    const handleBarCodeScanned = ({ data }) => {
+        try {
+            const qrData = JSON.parse(data);
+            const order = orders.find(o => o.id === qrData.orderId);
+
+            if (!order) {
+                Alert.alert('Error', 'Order not found');
+                setScanning(false);
+                return;
+            }
+
+            if (order.status === 'Picked Up') {
+                Alert.alert('Info', 'Order already picked up');
+                setScanning(false);
+                return;
+            }
+
+            confirmPickup(order.id);
+            setScanning(false);
+            Alert.alert("Success", `Order #${order.id.slice(-6)} picked up!`);
+        } catch (e) {
+            Alert.alert("Error", "Invalid QR Code");
+            setScanning(false);
+        }
     };
 
     const handleTestAr = () => {
@@ -519,10 +550,19 @@ export default function OwnerDashboardScreen({ navigation }) {
 
                             <TouchableOpacity
                                 style={[styles.pickupBtn, { backgroundColor: '#10B981' }]}
-                                onPress={() => handleOrderStatus(order.id, 'Picked Up')}
+                                onPress={async () => {
+                                    if (!permission?.granted) {
+                                        const result = await requestPermission();
+                                        if (!result.granted) {
+                                            Alert.alert("Permission Denied", "Camera access is needed to scan QR code");
+                                            return;
+                                        }
+                                    }
+                                    setScanning(true);
+                                }}
                             >
-                                <Ionicons name="checkbox" size={16} color="#fff" />
-                                <Text style={styles.pickupBtnText}>Mark Picked Up</Text>
+                                <Ionicons name="qr-code" size={16} color="#fff" />
+                                <Text style={styles.pickupBtnText}>Scan QR Code</Text>
                             </TouchableOpacity>
                         </View>
                     ))}
@@ -797,6 +837,30 @@ export default function OwnerDashboardScreen({ navigation }) {
                 </View>
             </Modal>
 
+            {/* QR Scanner Modal */}
+            {/* QR Scanner Modal */}
+            <Modal visible={scanning} animationType="slide" transparent={false} presentationStyle="fullScreen">
+                <View style={[styles.scannerContainer, { flex: 1, backgroundColor: 'black' }]}>
+                    <CameraView
+                        onBarcodeScanned={scanning ? handleBarCodeScanned : undefined}
+                        barcodeScannerSettings={{
+                            barcodeTypes: ["qr"],
+                        }}
+                        style={[StyleSheet.absoluteFillObject, { flex: 1 }]}
+                    />
+                    <View style={[styles.scannerOverlay, { flex: 1, justifyContent: 'space-between', paddingVertical: 50 }]}>
+                        <View style={styles.scannerHeader}>
+                            <Text style={styles.scannerTitle}>Scan Customer QR</Text>
+                            <TouchableOpacity onPress={() => setScanning(false)} style={styles.scannerClose}>
+                                <Ionicons name="close-circle" size={40} color="#fff" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.scannerBox} />
+                        <Text style={styles.scannerHint}>Align the QR code within the frame</Text>
+                    </View>
+                </View>
+            </Modal>
+
             <View style={{ height: 40 }} />
         </ScrollView>
     );
@@ -891,7 +955,7 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: 18, fontWeight: 'bold' },
     input: { borderWidth: 1, borderRadius: 12, padding: 12 },
     saveBtn: { height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 25 },
-    saveBtnText: { color: '#fff', fontWeight: 'bold' },
+    saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
     modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
     modalClose: { position: 'absolute', top: 50, right: 20 },
     fullProofImage: { width: '90%', height: '80%' },
