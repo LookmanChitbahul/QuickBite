@@ -1,9 +1,9 @@
 import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, StatusBar, Text, Dimensions, Linking, Platform, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useApp } from '../context/AppContext';
-import { darkMapStyle, deuteranopiaMapStyle, protanopiaMapStyle, tritanopiaMapStyle } from '../data/mapStyles';
+import { darkMapStyle, deuteranopiaMapStyle, protanopiaMapStyle, tritanopiaMapStyle, maptilerStreetsStyle } from '../data/mapStyles';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,6 +39,14 @@ const EMERGENCY_PLACES = [
 
 export default function DeliveryScreen({ navigation, route }) {
     const { isDarkMode, colorBlindType, restaurantLocation, restaurants, ownerRestaurantId, userLocation, theme } = useApp();
+
+    const currentMapStyle = useMemo(() => {
+        if (colorBlindType === 'deuteranopia') return deuteranopiaMapStyle;
+        if (colorBlindType === 'protanopia') return protanopiaMapStyle;
+        if (colorBlindType === 'tritanopia') return tritanopiaMapStyle;
+        return isDarkMode ? darkMapStyle : maptilerStreetsStyle;
+    }, [isDarkMode, colorBlindType]);
+
     const textColor = isDarkMode ? '#FFFFFF' : '#111827';
     const subTextColor = isDarkMode ? '#9CA3AF' : '#4B5563';
 
@@ -47,7 +55,7 @@ export default function DeliveryScreen({ navigation, route }) {
 
     // UI States
     const [selectedRestaurant, setSelectedRestaurant] = useState(null);
-    const [is3DMode, setIs3DMode] = useState(false); // Toggle for "Tilt Mode"
+    const [is3DMode, setIs3DMode] = useState(true); // Default to 3D for "WOW" factor
     const slideAnim = useRef(new Animated.Value(300)).current; // For bottom sheet animation
 
     const myRestaurant = useMemo(() => restaurants.find(r => r.id === ownerRestaurantId), [restaurants, ownerRestaurantId]);
@@ -79,9 +87,15 @@ export default function DeliveryScreen({ navigation, route }) {
 
             mapRef.current?.animateCamera({
                 center: target,
-                zoom: 17,
-                pitch: 45, // Auto-tilt slightly for better view
+                zoom: 18, // Higher zoom for buildings
+                pitch: 60, // Aggressive 3D tilt
                 heading: 0
+            }, { duration: 1000 });
+        } else {
+            // Default 3D view
+            mapRef.current?.animateCamera({
+                pitch: 45,
+                zoom: 16
             }, { duration: 1000 });
         }
     }, [route?.params?.restaurant]);
@@ -90,7 +104,8 @@ export default function DeliveryScreen({ navigation, route }) {
         if (userLocation && mapRef.current) {
             mapRef.current.animateCamera({
                 center: userLocation,
-                zoom: 15,
+                zoom: 17,
+                pitch: 45,
             }, { duration: 1000 });
         }
     };
@@ -102,24 +117,19 @@ export default function DeliveryScreen({ navigation, route }) {
             <MapView
                 ref={mapRef}
                 style={styles.map}
-                mapType="none"
+                provider={PROVIDER_GOOGLE}
+                customMapStyle={currentMapStyle}
+                showsBuildings={true}
+                showsIndoors={true}
+                showsTraffic={false}
                 initialRegion={{
                     ...DEFAULT_LOC,
-                    latitudeDelta: 0.1,
-                    longitudeDelta: 0.1,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
                 }}
                 pitchEnabled={true}
                 rotateEnabled={true}
-                scrollEnabled={!is3DMode} // In 3D Mode, we might want to prioritize pitch/rotate gestures? 
-            // Actually, standard usage allows both.
-            // But user asked for a specific toggle. 
-            // Let's interpret "Tilt Mode" as: Locking pan to prevent accidental movement while tilting?
-            // Or better: Re-enable scroll always, just give them the freedom.
             >
-                <UrlTile
-                    urlTemplate={`https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAPTILER_API_KEY}`}
-                    zIndex={-1}
-                />
 
                 {/* User Location Marker */}
                 {userLocation && (
@@ -231,14 +241,7 @@ export default function DeliveryScreen({ navigation, route }) {
                                 </TouchableOpacity>
                             )}
 
-                            {/* AR Button */}
-                            <TouchableOpacity
-                                style={[styles.actionBtn, { backgroundColor: isDarkMode ? '#374151' : '#F3F4F6', flex: 1, marginHorizontal: 8 }]}
-                                onPress={() => navigation.navigate('ARScreen', { restaurant: selectedRestaurant })}
-                            >
-                                <Ionicons name="scan-outline" size={18} color={textColor} style={{ marginRight: 5 }} />
-                                <Text style={[styles.actionBtnText, { color: textColor }]}>AR</Text>
-                            </TouchableOpacity>
+
 
                             {/* Directions Button */}
                             <TouchableOpacity

@@ -43,8 +43,7 @@ export default function OwnerDashboardScreen({ navigation }) {
     const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewContent, setPreviewContent] = useState(null);
-    const [isArTestVisible, setIsArTestVisible] = useState(false);
-    const [arTestLoc, setArTestLoc] = useState({ lat: '-20.2443', lng: '57.4882', name: 'Test Place' });
+
 
     // Offer State
     const [isOfferModalVisible, setIsOfferModalVisible] = useState(false);
@@ -238,23 +237,7 @@ export default function OwnerDashboardScreen({ navigation }) {
         }
     };
 
-    const handleTestAr = () => {
-        const lat = parseFloat(arTestLoc.lat);
-        const lng = parseFloat(arTestLoc.lng);
-        if (isNaN(lat) || isNaN(lng)) {
-            Alert.alert("Error", "Invalid coordinates");
-            return;
-        }
-        setIsArTestVisible(false);
-        navigation.navigate('ARScreen', {
-            restaurant: {
-                id: 'test_ar',
-                name: arTestLoc.name,
-                location: { latitude: lat, longitude: lng },
-                description: 'Manual AR Test Location'
-            }
-        });
-    };
+
 
     const handleGenerateReport = async () => {
         const selectedRes = restaurants.find(r => r.id === revenueResId);
@@ -1068,50 +1051,6 @@ export default function OwnerDashboardScreen({ navigation }) {
                 </View>
             </Modal>
 
-            {/* AR Test Modal */}
-            <Modal visible={isArTestVisible} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: textColor }]}>AR Location Test</Text>
-                            <TouchableOpacity onPress={() => setIsArTestVisible(false)}>
-                                <Ionicons name="close" size={24} color={textColor} />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={{ color: subTextColor, marginBottom: 15 }}>Enter coordinates to test AR view.</Text>
-
-                        <TextInput
-                            placeholder="Place Name"
-                            placeholderTextColor={subTextColor}
-                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
-                            value={arTestLoc.name}
-                            onChangeText={t => setArTestLoc({ ...arTestLoc, name: t })}
-                        />
-                        <TextInput
-                            placeholder="Latitude (e.g. -20.24)"
-                            placeholderTextColor={subTextColor}
-                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
-                            value={arTestLoc.lat}
-                            keyboardType="default" // Allow negative signs and dots freely
-                            onChangeText={t => setArTestLoc({ ...arTestLoc, lat: t })}
-                        />
-                        <TextInput
-                            placeholder="Longitude (e.g. 57.48)"
-                            placeholderTextColor={subTextColor}
-                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
-                            value={arTestLoc.lng}
-                            keyboardType="default" // Allow negative signs and dots freely
-                            onChangeText={t => setArTestLoc({ ...arTestLoc, lng: t })}
-                        />
-
-                        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#8B5CF6' }]} onPress={handleTestAr}>
-                            <Text style={styles.saveBtnText}>Launch AR View</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* QR Scanner Modal */}
             {/* QR Scanner Modal */}
             <Modal visible={scanning} animationType="slide" transparent={false} presentationStyle="fullScreen">
                 <View style={[styles.scannerContainer, { flex: 1, backgroundColor: 'black' }]}>

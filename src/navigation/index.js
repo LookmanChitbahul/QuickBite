@@ -20,7 +20,7 @@ import EditProfileScreen from '../screens/EditProfileScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 import CartScreen from '../screens/CartScreen';
-import ARScreen from '../screens/ARScreen';
+
 import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
 import theme from '../styles/theme';
@@ -66,7 +66,7 @@ export default function RootNavigator() {
           <Stack.Screen name="Map" component={DeliveryScreen} />
           <Stack.Screen name="Cart" component={CartScreen} />
           <Stack.Screen name="OrderHistory" component={OrderHistoryScreen} />
-          <Stack.Screen name="ARScreen" component={ARScreen} />
+
           <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
           <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
         </>

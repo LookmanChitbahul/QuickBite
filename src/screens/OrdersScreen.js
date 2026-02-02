@@ -5,8 +5,11 @@ import { useApp } from '../context/AppContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 
+import QRCode from 'react-native-qrcode-svg';
+
 export default function OrdersScreen({ navigation }) {
   const { orders, theme, isDarkMode, setActiveTab, t, language } = useApp();
+  const [selectedOrderForQR, setSelectedOrderForQR] = useState(null);
 
   // Background Animation
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -56,14 +59,22 @@ export default function OrdersScreen({ navigation }) {
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={[
               styles.statusBadge,
-              (isLatest || item.status === 'Picked Up')
+              (item.status === 'Confirmed' || item.status === 'Picked Up')
                 ? { backgroundColor: theme.colors.successLight, color: theme.colors.success }
-                : { backgroundColor: theme.colors.input, color: theme.colors.muted }
+                : { backgroundColor: theme.colors.primaryLight, color: theme.colors.primary }
             ]}>
               {item.status}
             </Text>
             {item.status === 'Picked Up' && (
               <Ionicons name="checkmark-done-circle" size={28} color={theme.colors.success} style={{ marginTop: 8 }} />
+            )}
+            {item.status === 'Confirmed' && (
+              <TouchableOpacity
+                style={styles.qrIconBtn}
+                onPress={() => setSelectedOrderForQR(item)}
+              >
+                <Ionicons name="qr-code" size={24} color={theme.colors.primary} />
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -79,7 +90,16 @@ export default function OrdersScreen({ navigation }) {
         <View style={styles.cardFooter}>
           <Text style={[styles.totalText, { color: theme.colors.text }]}>{t('total')}: Rs {item.total.toFixed(2)}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {item.status !== 'Picked Up' && (
+            {item.status === 'Confirmed' && (
+              <TouchableOpacity
+                style={[styles.trackBtn, { backgroundColor: theme.colors.successLight }]}
+                onPress={() => setSelectedOrderForQR(item)}
+              >
+                <Text style={[styles.trackText, { color: theme.colors.success }]}>Tap for QR</Text>
+                <Ionicons name="qr-code-outline" size={14} color={theme.colors.success} />
+              </TouchableOpacity>
+            )}
+            {item.status === 'Awaiting Validation' && (
               <View style={[styles.trackBtn, { backgroundColor: theme.colors.primaryLight }]}>
                 <Text style={[styles.trackText, { color: theme.colors.primaryDark }]}>View Location</Text>
                 <Ionicons name="map" size={14} color={theme.colors.primaryDark} />
@@ -90,7 +110,7 @@ export default function OrdersScreen({ navigation }) {
 
         {item.paymentProof && (
           <View style={styles.paymentProofThumbContainer}>
-            <Text style={[styles.proofLabel, { color: theme.colors.textLight }]}>Payment Verification Photo:</Text>
+            <Text style={[styles.proofLabel, { color: theme.colors.textLight }]}>Payment Photo:</Text>
             <Image source={{ uri: item.paymentProof }} style={styles.proofThumbSmall} />
           </View>
         )}
@@ -161,15 +181,56 @@ export default function OrdersScreen({ navigation }) {
       </View>
 
       <FlatList
-        data={orders.filter(o => o.status !== 'Picked Up')}
+        data={orders.filter(o => o.status !== 'Picked Up' && o.status !== 'Payment Rejected')}
         keyExtractor={item => item.id}
         renderItem={renderOrderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* QR Code Modal */}
+      <Modal
+        visible={!!selectedOrderForQR}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedOrderForQR(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Verification QR Code</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.colors.textLight }]}>
+              Show this to the restaurant owner at pickup.
+            </Text>
+
+            <View style={styles.qrContainer}>
+              {selectedOrderForQR && (
+                <QRCode
+                  value={JSON.stringify({ orderId: selectedOrderForQR.id, type: 'pickup' })}
+                  size={200}
+                  color={isDarkMode ? '#FFF' : '#000'}
+                  backgroundColor='transparent'
+                />
+              )}
+            </View>
+
+            <Text style={[styles.orderRef, { color: theme.colors.primary }]}>
+              Ref: #{selectedOrderForQR?.id.slice(-6).toUpperCase()}
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.closeBtn, { backgroundColor: theme.colors.primary }]}
+              onPress={() => setSelectedOrderForQR(null)}
+            >
+              <Text style={styles.closeBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+import { Modal } from 'react-native';
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -200,7 +261,7 @@ const styles = StyleSheet.create({
     elevation: 3
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  storeInfo: { flexDirection: 'row', alignItems: 'center' },
+  storeInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   logoPlaceholder: { width: 40, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   storeName: { fontSize: 16, fontWeight: 'bold' },
   orderDate: { fontSize: 12, marginTop: 2 },
@@ -212,8 +273,7 @@ const styles = StyleSheet.create({
   totalText: { fontSize: 16, fontWeight: 'bold' },
   trackBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   trackText: { fontSize: 12, fontWeight: 'bold', marginRight: 4 },
-  doneBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  doneText: { fontSize: 12, fontWeight: 'bold', marginLeft: 4 },
+  qrIconBtn: { marginTop: 10, padding: 5 },
   orderId: { fontSize: 12, fontWeight: '700', marginVertical: 2 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', marginTop: 20 },
