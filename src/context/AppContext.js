@@ -14,160 +14,39 @@ import { lightTheme, darkTheme, colorBlindLightTheme, colorBlindDarkTheme } from
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
+    // --- State Declarations ---
+    const [user, setUser] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [hasSeenWelcome, setHasSeenWelcome] = useState(false);
+    const [savedAccounts, setSavedAccounts] = useState([]);
     const [restaurants, setRestaurants] = useState(initialRestaurants);
     const [cart, setCart] = useState([]);
     const [orders, setOrders] = useState([]);
-    const [promotions, setPromotions] = useState([]); // Custom promotions added by owners
+    const [promotions, setPromotions] = useState([]);
+    const [activeTab, setActiveTab] = useState('Home');
+    const [language, setLanguage] = useState('en');
+    const [paymentMethods, setPaymentMethods] = useState([]);
 
-    // Firestore Listener for Promotions
-    useEffect(() => {
-        if (!user) {
-            setPromotions([]);
-            return;
-        }
-
-        const q = query(collection(db, 'promotions'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedPromos = snapshot.docs.map(doc => doc.data());
-            setPromotions(fetchedPromos);
-
-            // Sync menu prices with active promotions
-            setRestaurants(currentRestaurants => {
-                return currentRestaurants.map(r => {
-                    let menuChanged = false;
-                    const newMenu = r.menu.map(item => {
-                        // Check if there is an active promotion for this item in this restaurant
-                        const activePromo = fetchedPromos.find(p => p.restaurant?.id === r.id && p.title === item.name);
-
-                        if (activePromo) {
-                            // Apply promo price if different
-                            if (item.price !== activePromo.itemPrice) {
-                                menuChanged = true;
-                                return {
-                                    ...item,
-                                    price: activePromo.itemPrice,
-                                    originalPrice: item.originalPrice || item.price
-                                };
-                            }
-                        } else {
-                            // No active promo. If it has an originalPrice, revert it.
-                            if (item.originalPrice) {
-                                menuChanged = true;
-                                return {
-                                    ...item,
-                                    price: item.originalPrice,
-                                    originalPrice: undefined
-                                };
-                            }
-                        }
-                        return item;
-                    });
-
-                    if (menuChanged) return { ...r, menu: newMenu };
-                    return r;
-                });
-            });
-
-        }, (error) => {
-            console.error("Error fetching promotions:", error);
-        });
-
-        return () => unsubscribe();
-    }, [user]);
-
-
-    const addPromotion = async (promo) => {
-        try {
-            await setDoc(doc(db, 'promotions', promo.id), promo);
-        } catch (e) {
-            console.error("Failed to add promotion", e);
-        }
-    };
-
-    const removePromotion = async (promoId) => {
-        try {
-            await deleteDoc(doc(db, 'promotions', promoId));
-        } catch (e) {
-            console.error("Failed to remove promotion", e);
-        }
-    };
-
-    // Firestore realtime listener for orders - Moved inside to depend on user
-    useEffect(() => {
-        if (!user) {
-            setOrders([]);
-            return;
-        }
-
-        try {
-            // Filter by userId if not owner, or restaurantId if owner
-            // For now, simple filter to avoid 'Missing or insufficient permissions' on whole collection
-            const ordersRef = collection(db, 'orders');
-            let q;
-
-            if (user.isOwner) {
-                // Fetch ALL orders for the owner dashboard
-                // Note: If you have strict security rules (e.g. where('restaurantId', '==', ...)), this might need a where clause.
-                // Removing orderBy from query to avoid index issues; sorting client-side.
-                q = query(ordersRef);
-            } else {
-                q = query(ordersRef, where('userId', '==', user.uid));
-            }
-
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                // Client-side sort
-                fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
-                setOrders(fetchedOrders);
-            }, (error) => {
-                console.log("Firestore Orders Error (Handled):", error.message);
-                // If permissions fail, we still have local history
-            });
-            return () => unsubscribe();
-        } catch (e) {
-            console.log("Listener Setup Error:", e.message);
-        }
-    }, [user?.uid, user?.isOwner, user?.restaurantId]);
-
+    // Location State
     const [restaurantLocation, setRestaurantLocation] = useState({ latitude: -20.1609, longitude: 57.5050 });
     const [userLocation, setUserLocation] = useState(null);
     const [userAddress, setUserAddress] = useState('Fetching location...');
 
-    // Auth & Onboarding State
-    const [user, setUser] = useState(null);
-    const [hasSeenWelcome, setHasSeenWelcome] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [savedAccounts, setSavedAccounts] = useState([]);
-
-    // Theme & Settings State
+    // Theme State
     const systemScheme = useColorScheme();
     const [isDarkMode, setIsDarkMode] = useState(systemScheme === 'dark');
     const [colorBlindType, setColorBlindType] = useState('none');
     const [theme, setTheme] = useState(lightTheme);
+    const [settings, setSettings] = useState({ notifications: true, location: true });
 
-    const [settings, setSettings] = useState({
-        notifications: true,
-        location: true,
-    });
-    const [activeTab, setActiveTab] = useState('Home');
+    // --- Effects ---
 
-    useEffect(() => {
-        if (colorBlindType !== 'none') {
-            setTheme(isDarkMode ? colorBlindDarkTheme : colorBlindLightTheme);
-        } else {
-            setTheme(isDarkMode ? darkTheme : lightTheme);
-        }
-    }, [isDarkMode, colorBlindType]);
-
-    const toggleColorBlind = () => setColorBlindType(prev => prev === 'none' ? 'deuteranopia' : 'none');
-
-    const [paymentMethods, setPaymentMethods] = useState([]);
-    const [language, setLanguage] = useState('en');
-
+    // Translation helper
     const t = (key) => {
         return translations[language][key] || key;
     };
 
+    // Load saved language
     useEffect(() => {
         const loadLang = async () => {
             const savedLang = await AsyncStorage.getItem('userLanguage');
@@ -181,437 +60,299 @@ export const AppProvider = ({ children }) => {
         await AsyncStorage.setItem('userLanguage', newLang);
     };
 
+    // Promotion Sync Logic
     useEffect(() => {
-        setIsDarkMode(systemScheme === 'dark');
-    }, [systemScheme]);
-
-    const logout = async () => {
-        try {
-            await signOut(auth);
-            setUser(null);
-            setHasSeenWelcome(false);
-            await AsyncStorage.removeItem('userSession');
-            await AsyncStorage.removeItem('hasSeenWelcome');
-            await AsyncStorage.removeItem('rememberMe');
-            await AsyncStorage.removeItem('lastActiveTime');
-        } catch (e) {
-            console.error("Logout failed", e);
+        if (!user) {
+            setPromotions([]);
+            return;
         }
-    };
 
-    // Check Firebase Auth & Storage on Mount
-    useEffect(() => {
-        const loadInitialData = async () => {
-            try {
-                const savedOrders = await AsyncStorage.getItem('orderHistory');
-                if (savedOrders) setOrders(JSON.parse(savedOrders));
+        const q = query(collection(db, 'promotions'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedPromos = snapshot.docs.map(doc => doc.data());
+            setPromotions(fetchedPromos);
 
-                const seenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
-                if (seenWelcome === 'true') setHasSeenWelcome(true);
-
-                // Fetch Location
-                let { status } = await Location.requestForegroundPermissionsAsync();
-                if (status === 'granted') {
-                    let loc = await Location.getCurrentPositionAsync({});
-                    setUserLocation(loc.coords);
-
-                    // Reverse Geocode
-                    let reverse = await Location.reverseGeocodeAsync({
-                        latitude: loc.coords.latitude,
-                        longitude: loc.coords.longitude
+            setRestaurants(currentRestaurants => {
+                return currentRestaurants.map(r => {
+                    let menuChanged = false;
+                    const newMenu = r.menu.map(item => {
+                        const activePromo = fetchedPromos.find(p => p.restaurant?.id === r.id && p.title === item.name);
+                        if (activePromo) {
+                            if (item.price !== activePromo.itemPrice) {
+                                menuChanged = true;
+                                return { ...item, price: activePromo.itemPrice, originalPrice: item.originalPrice || item.price };
+                            }
+                        } else if (item.originalPrice) {
+                            menuChanged = true;
+                            return { ...item, price: item.originalPrice, originalPrice: undefined };
+                        }
+                        return item;
                     });
+                    if (menuChanged) return { ...r, menu: newMenu };
+                    return r;
+                });
+            });
+        }, (error) => {
+            console.error("Error fetching promotions:", error);
+        });
 
-                    if (reverse.length > 0) {
-                        const addr = reverse[0];
-                        // Prioritize street over name (name often contains plus codes)
-                        const street = addr.street || addr.name || '';
-                        const city = addr.city || addr.region || addr.subregion || '';
-                        const displayAddr = `${street}${city ? ', ' + city : ''}`.trim();
-                        setUserAddress(displayAddr || 'Mauritius');
-                    }
-                } else {
-                    setUserAddress('Bagatelle Mall, Moka'); // Fallback
-                }
-            } catch (e) {
-                console.error("Failed to load initial data", e);
-                setUserAddress('Bagatelle Mall, Moka');
-            }
-        };
-        loadInitialData();
+        return () => unsubscribe();
+    }, [user]);
 
+    // Order Listener Logic
+    useEffect(() => {
+        if (!user) {
+            setOrders([]);
+            return;
+        }
+
+        const ordersRef = collection(db, 'orders');
+        let q;
+
+        if (user.isOwner) {
+            q = query(ordersRef);
+        } else {
+            q = query(ordersRef, where('userId', '==', user.uid));
+        }
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+            setOrders(fetchedOrders);
+        }, (error) => {
+            console.log("Firestore Orders Error:", error.message);
+        });
+
+        return () => unsubscribe();
+    }, [user?.uid, user?.isOwner]);
+
+    // Auth Change Listener
+    useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             try {
                 if (firebaseUser) {
-                    const rememberMe = await AsyncStorage.getItem('rememberMe');
-                    const lastActive = await AsyncStorage.getItem('lastActiveTime');
-                    const now = Date.now();
-
-                    // Session logic
-                    if (rememberMe !== 'true' && lastActive) {
-                        const diff = now - parseInt(lastActive);
-                        if (diff > 300000) { // 5 minutes inactivity
-                            // await logout(); // DISABLE auto-logout for now to fix owner login loop
-                            // setIsLoading(false);
-                            // return;
-                        }
-                    }
-
-                    await AsyncStorage.setItem('lastActiveTime', now.toString());
-
-                    // CRITICAL: Check if user exists in Firestore
                     const userDocRef = doc(db, 'users', firebaseUser.uid);
                     const userDoc = await getDoc(userDocRef);
 
+                    let userData;
                     if (!userDoc.exists()) {
-                        console.warn("User exists in Auth but not in Firestore. Creating recovery profile...");
-                        // Instead of logging out, we RECOVER by creating the missing doc
-                        const recoveryData = {
+                        userData = {
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             name: firebaseUser.displayName || 'App User',
-                            photoUrl: firebaseUser.photoURL,
                             role: (firebaseUser.email?.toLowerCase().includes('owner') || firebaseUser.email === 'lookman1@gmail.com') ? 'owner' : 'user',
                             createdAt: new Date().toISOString(),
-                            isVerified: true
                         };
-
-                        await setDoc(userDocRef, recoveryData);
-
-                        // Proceed with this new data
-                        let userData = recoveryData;
-                        const isOwner = userData.role === 'owner';
-                        const finalUser = { ...userProfile, ...userData, isOwner };
-                        setUser(finalUser);
-                        setIsLoading(false);
-                        return;
+                        await setDoc(userDocRef, userData);
+                    } else {
+                        userData = { uid: firebaseUser.uid, ...userDoc.data() };
                     }
 
-                    let userData = {
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        name: firebaseUser.displayName,
-                        photoUrl: firebaseUser.photoURL,
-                        ...userDoc.data()
-                    };
+                    if (userData.paymentMethods) setPaymentMethods(userData.paymentMethods);
 
-                    if (userData.paymentMethods) {
-                        setPaymentMethods(userData.paymentMethods);
-                    }
-
-                    const isOwner = userData.email === 'owner@gmail.com' || userData.role === 'owner';
-                    const finalUser = { ...userProfile, ...userData, isOwner };
-                    setUser(finalUser);
+                    const isOwner = userData.role === 'owner' || userData.email === 'owner@gmail.com';
+                    setUser({ ...userProfile, ...userData, isOwner });
                 } else {
                     setUser(null);
                 }
             } catch (error) {
-                if (error.code === 'permission-denied') {
-                    console.warn("Firestore access denied. Falling back to Auth only mode.");
-                    // Still set the user from Auth so app isn't stuck
-                    const fallbackUser = {
-                        uid: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        name: firebaseUser.displayName || 'App User',
-                        photoUrl: firebaseUser.photoURL,
-                        isOwner: firebaseUser.email?.includes('owner') || firebaseUser.email === 'owner@gmail.com'
-                    };
-                    setUser(fallbackUser);
-                } else {
-                    console.error("Firebase Auth state error:", error);
-                    setUser(null);
-                }
+                console.error("Auth state error:", error);
             } finally {
                 setIsLoading(false);
             }
         });
 
-        // AppState listener for activity tracking
-        const subscription = AppState.addEventListener('change', async (nextAppState) => {
-            if (nextAppState === 'active') {
-                const lastActive = await AsyncStorage.getItem('lastActiveTime');
-                const rememberMe = await AsyncStorage.getItem('rememberMe');
-                const now = Date.now();
-
-                if (rememberMe !== 'true' && lastActive) {
-                    if (now - parseInt(lastActive) > 300000) {
-                        await logout();
-                    }
-                }
-                await AsyncStorage.setItem('lastActiveTime', now.toString());
-            } else if (nextAppState === 'background') {
-                // Mark background time as last active
-                await AsyncStorage.setItem('lastActiveTime', Date.now().toString());
-            }
-        });
-
-        return () => {
-            unsubscribe();
-            subscription.remove();
-        };
+        return () => unsubscribe();
     }, []);
 
+    // Initial Data & Location
     useEffect(() => {
-        const saveOrders = async () => {
-            try {
-                await AsyncStorage.setItem('orderHistory', JSON.stringify(orders));
-            } catch (e) {
-                console.error("Failed to save orders", e);
+        const init = async () => {
+            const seenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
+            if (seenWelcome === 'true') setHasSeenWelcome(true);
+
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+                let loc = await Location.getCurrentPositionAsync({});
+                setUserLocation(loc.coords);
+                let reverse = await Location.reverseGeocodeAsync(loc.coords);
+                if (reverse.length > 0) {
+                    setUserAddress(`${reverse[0].street || ''}, ${reverse[0].city || ''}`);
+                }
             }
         };
-        if (orders.length > 0) saveOrders();
-    }, [orders]);
+        init();
+    }, []);
 
-    const completeOnboarding = async () => {
-        try {
-            await AsyncStorage.setItem('hasSeenWelcome', 'true');
-            setHasSeenWelcome(true);
-        } catch (e) {
-            console.error("Failed to save onboarding status");
-        }
+    // --- Methods ---
+    const logout = async () => {
+        await signOut(auth);
+        setUser(null);
+        await AsyncStorage.multiRemove(['userSession', 'hasSeenWelcome', 'rememberMe']);
     };
 
-    const login = async (email, password, rememberMe = false) => { };
+    const addPromotion = async (promo) => {
+        await setDoc(doc(db, 'promotions', promo.id), promo);
+    };
+
+    const removePromotion = async (promoId) => {
+        await deleteDoc(doc(db, 'promotions', promoId));
+    };
+
+    const login = async (email, password) => { /* placeholder */ };
+
+    const completeOnboarding = async () => {
+        await AsyncStorage.setItem('hasSeenWelcome', 'true');
+        setHasSeenWelcome(true);
+    };
+
+    const toggleTheme = () => setIsDarkMode(prev => !prev);
+    const toggleColorBlind = () => setColorBlindType(prev => prev === 'none' ? 'deuteranopia' : 'none');
+
+    useEffect(() => {
+        setTheme(isDarkMode
+            ? (colorBlindType !== 'none' ? colorBlindDarkTheme : darkTheme)
+            : (colorBlindType !== 'none' ? colorBlindLightTheme : lightTheme)
+        );
+    }, [isDarkMode, colorBlindType]);
 
     const forgotPassword = async (email) => {
         try {
             await sendPasswordResetEmail(auth, email);
-            const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-            await setDoc(doc(db, 'passwordResets', email), { code: otpCode, createdAt: new Date().toISOString() });
-            return { success: true, code: otpCode };
-        } catch (error) {
-            return { success: false, error: error.message };
-        }
-    };
-
-    const toggleTheme = () => setIsDarkMode(prev => !prev);
-    const registerForPushNotificationsAsync = async () => { return null; };
-
-    const toggleSettings = async (key) => {
-        setSettings(prev => {
-            const newValue = !prev[key];
-            if (key === 'notifications' && newValue === true) registerForPushNotificationsAsync();
-            return { ...prev, [key]: newValue };
-        });
-    };
-
-    const scheduleNotification = async (title, body) => { };
-
-    const saveAccountToHistory = async (userData) => {
-        try {
-            const accounts = [...savedAccounts];
-            const index = accounts.findIndex(a => a.email === userData.email);
-            const accountInfo = {
-                uid: userData.uid,
-                email: userData.email,
-                name: userData.name || userData.displayName,
-                photoUrl: userData.photoUrl || userData.photoURL,
-                type: userData.type || 'Google'
-            };
-            if (index > -1) accounts[index] = accountInfo;
-            else accounts.unshift(accountInfo);
-            const limitedAccounts = accounts.slice(0, 5);
-            setSavedAccounts(limitedAccounts);
-            await AsyncStorage.setItem('savedAccounts', JSON.stringify(limitedAccounts));
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            await setDoc(doc(db, 'passwordResets', email), { code, createdAt: new Date().toISOString() });
+            return { success: true, code };
         } catch (e) {
-            console.error("Error saving account history", e);
+            return { success: false, error: e.message };
         }
     };
 
     const checkUserInDatabase = async (email) => {
-        try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('email', '==', email));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const userData = querySnapshot.docs[0].data();
-                return { exists: true, data: userData, uid: querySnapshot.docs[0].id };
-            }
-            return { exists: false };
-        } catch (e) {
-            return { exists: false, error: e.message };
-        }
+        const q = query(collection(db, 'users'), where('email', '==', email));
+        const snap = await getDocs(q);
+        return !snap.empty ? { exists: true, data: snap.docs[0].data(), uid: snap.docs[0].id } : { exists: false };
     };
 
-    const verifyResetCode = async (email, inputCode) => {
-        try {
-            const resetDoc = await getDoc(doc(db, 'passwordResets', email));
-            if (resetDoc.exists() && resetDoc.data().code === inputCode) return true;
-            return false;
-        } catch (e) {
-            return false;
-        }
+    const verifyResetCode = async (email, code) => {
+        const snap = await getDoc(doc(db, 'passwordResets', email));
+        return snap.exists() && snap.data().code === code;
     };
 
     const updateUserProfile = async (updates) => {
         if (!user) return;
-        try {
-            const updatedUser = { ...user, ...updates };
-            setUser(updatedUser);
-            await AsyncStorage.setItem('userSession', JSON.stringify(updatedUser));
-            await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
-        } catch (error) {
-            console.error("Error updating profile:", error);
-        }
+        setUser(prev => ({ ...prev, ...updates }));
+        await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
     };
 
     const addPaymentMethod = async (method) => {
-        const newMethods = [...paymentMethods, method];
-        setPaymentMethods(newMethods);
-        if (user) await setDoc(doc(db, 'users', user.uid), { paymentMethods: newMethods }, { merge: true });
+        const next = [...paymentMethods, method];
+        setPaymentMethods(next);
+        if (user) await setDoc(doc(db, 'users', user.uid), { paymentMethods: next }, { merge: true });
     };
 
     const deletePaymentMethod = async (id) => {
-        const newMethods = paymentMethods.filter(m => m.id !== id);
-        setPaymentMethods(newMethods);
-        if (user) await setDoc(doc(db, 'users', user.uid), { paymentMethods: newMethods }, { merge: true });
+        const next = paymentMethods.filter(m => m.id !== id);
+        setPaymentMethods(next);
+        if (user) await setDoc(doc(db, 'users', user.uid), { paymentMethods: next }, { merge: true });
     };
 
-    const toggleFavorite = (restaurantId) => {
+    const toggleFavorite = (id) => {
         setUser(prev => {
             if (!prev) return prev;
-            const isFav = prev.favorites?.includes(restaurantId);
-            const newFavs = isFav ? prev.favorites.filter(id => id !== restaurantId) : [...(prev.favorites || []), restaurantId];
-            const updated = { ...prev, favorites: newFavs };
-            AsyncStorage.setItem('userSession', JSON.stringify(updated));
-            return updated;
+            const favs = prev.favorites || [];
+            const next = favs.includes(id) ? favs.filter(x => x !== id) : [...favs, id];
+            return { ...prev, favorites: next };
         });
     };
 
-    const removeFromCart = (itemId) => setCart((prevCart) => prevCart.filter((item) => item.id !== itemId));
-
-    const confirmPickup = async (orderId) => {
-        try {
-            const orderRef = doc(db, 'orders', orderId);
-            await setDoc(orderRef, {
-                status: 'Picked Up',
-                pickupTime: new Date().toISOString()
-            }, { merge: true });
-        } catch (e) {
-            console.error("Failed to confirm pickup", e);
+    const saveAccountToHistory = async (acc) => {
+        const current = await AsyncStorage.getItem('savedAccounts');
+        let accounts = current ? JSON.parse(current) : [];
+        if (!accounts.find(a => a.email === acc.email)) {
+            accounts.push({ id: acc.uid, name: acc.name, email: acc.email, photo: acc.photoUrl });
+            await AsyncStorage.setItem('savedAccounts', JSON.stringify(accounts));
+            setSavedAccounts(accounts);
         }
     };
 
-    const updateCartQuantity = (itemId, change) => {
-        setCart((prevCart) => prevCart.map(item => {
-            if (item.id === itemId) {
-                const newQuantity = item.quantity + change;
-                if (newQuantity <= 0) {
-                    return null; // Filter out later
-                }
-                return { ...item, quantity: newQuantity };
-            }
-            return item;
-        }).filter(Boolean));
-    };
+    useEffect(() => {
+        const loadSaved = async () => {
+            const current = await AsyncStorage.getItem('savedAccounts');
+            if (current) setSavedAccounts(JSON.parse(current));
+        };
+        loadSaved();
+    }, []);
 
     const addToCart = (item, restaurant) => {
-        // Check for restaurant mismatch using current state
-
-        // RELOADING logic to avoid the setter complexity above:
-        // We will do the check outside the setter.
-        const currentCart = cart; // access state directly
-        if (currentCart.length > 0 && currentCart[0].restaurantId !== restaurant.id) {
-            Alert.alert(
-                "Start new basket?",
-                `Your cart contains items from ${currentCart[0].restaurantName}. Clear it to order from ${restaurant.name}?`,
-                [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                        text: "New Basket",
-                        onPress: () => {
-                            setCart([{ ...item, quantity: 1, restaurantId: restaurant.id, restaurantName: restaurant.name }]);
-                        }
-                    }
-                ]
-            );
+        if (cart.length > 0 && cart[0].restaurantId !== restaurant.id) {
+            Alert.alert("New Basket?", "Clear your current basket?", [
+                { text: "No" },
+                { text: "Yes", onPress: () => setCart([{ ...item, quantity: 1, restaurantId: restaurant.id, restaurantName: restaurant.name }]) }
+            ]);
             return;
         }
-
-        setCart((prevCart) => {
-            const existingItem = prevCart.find((cartItem) => cartItem.id === item.id);
-            if (existingItem) {
-                return prevCart.map((cartItem) => cartItem.id === item.id ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem);
-            } else {
-                return [...prevCart, { ...item, quantity: 1, restaurantId: restaurant.id, restaurantName: restaurant.name }];
-            }
+        setCart(prev => {
+            const ext = prev.find(x => x.id === item.id);
+            if (ext) return prev.map(x => x.id === item.id ? { ...x, quantity: x.quantity + 1 } : x);
+            return [...prev, { ...item, quantity: 1, restaurantId: restaurant.id, restaurantName: restaurant.name }];
         });
+    };
+
+    const removeFromCart = (id) => setCart(prev => prev.filter(x => x.id !== id));
+
+    const updateCartQuantity = (id, delta) => {
+        setCart(prev => prev.map(x => x.id === id ? { ...x, quantity: Math.max(0, x.quantity + delta) } : x).filter(x => x.quantity > 0));
     };
 
     const clearCart = () => setCart([]);
 
-    const addManualOrder = async (order) => {
-        try {
-            await addDoc(collection(db, 'orders'), order);
-        } catch (e) {
-            console.error("Failed to add manual order", e);
-        }
-    };
-
-    const placeOrder = async (paymentProof = null) => {
+    const placeOrder = async (proof) => {
         if (cart.length === 0) return false;
-        const firstItem = cart[0];
-        const restaurant = restaurants.find(r => r.id === firstItem.restaurantId);
-
-        // Ensure we handle numeric prices correctly
-        const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-        const newOrder = {
-            // id: generated by firestore
+        const total = cart.reduce((s, i) => s + (i.price * i.quantity), 0) + 15;
+        const order = {
             items: [...cart],
-            total: totalAmount,
+            total,
             date: new Date().toISOString(),
             status: 'Awaiting Validation',
-            restaurantId: firstItem.restaurantId,
-            restaurantName: firstItem.restaurantName || 'Restaurant',
-            location: restaurant?.location || restaurantLocation,
-            restaurantAddress: restaurant?.address || 'Restaurant Address',
-            paymentProof: paymentProof,
             userId: user?.uid || 'guest',
-            userName: user?.name || 'Guest User'
+            userName: user?.name || 'Guest',
+            paymentProof: proof,
+            restaurantId: cart[0].restaurantId,
+            restaurantName: cart[0].restaurantName
         };
-
         try {
-            await addDoc(collection(db, 'orders'), newOrder);
+            await addDoc(collection(db, 'orders'), order);
             clearCart();
             return true;
         } catch (e) {
-            Alert.alert("Error", "Failed to place order. Check connection.");
             console.error(e);
             return false;
         }
     };
 
-    const updateRestaurantMenu = (restaurantId, updatedMenu) => {
-        setRestaurants((prevRestaurants) => prevRestaurants.map((rest) => rest.id === restaurantId ? { ...rest, menu: updatedMenu } : rest));
+    const confirmPickup = async (orderId) => {
+        await setDoc(doc(db, 'orders', orderId), { status: 'Picked Up', pickupTime: new Date().toISOString() }, { merge: true });
     };
 
-    const addRestaurant = (newRestaurant) => setRestaurants(prev => [...prev, newRestaurant]);
-    const deleteRestaurant = (restaurantId) => setRestaurants(prev => prev.filter(r => r.id !== restaurantId));
-
-    const updateOrderStatus = async (orderId, newStatus) => {
-        // Optimistic update not needed as listener will catch it, but good for UI responsiveness
-        try {
-            const orderRef = doc(db, 'orders', orderId);
-            await setDoc(orderRef, { status: newStatus }, { merge: true });
-        } catch (e) {
-            console.error("Failed to update status", e);
-            Alert.alert("Update Failed", "Could not update order status. Please check permissions or connection.");
-        }
+    const updateOrderStatus = async (id, status) => {
+        await setDoc(doc(db, 'orders', id), { status }, { merge: true });
     };
+
+    const addManualOrder = async (o) => { await addDoc(collection(db, 'orders'), o); };
+    const deleteRestaurant = (id) => setRestaurants(prev => prev.filter(x => x.id !== id));
+    const addRestaurant = (r) => setRestaurants(prev => [...prev, r]);
+    const updateRestaurantMenu = (id, m) => setRestaurants(prev => prev.map(x => x.id === id ? { ...x, menu: m } : x));
 
     return (
-        <AppContext.Provider
-            value={{
-                restaurants, cart, orders, user, setUser, login, logout, isLoading, hasSeenWelcome, completeOnboarding,
-                addToCart, removeFromCart, updateCartQuantity, clearCart, placeOrder, updateRestaurantMenu, ownerRestaurantId: '2',
-                theme, isDarkMode, toggleTheme, colorBlindType, setColorBlindType, toggleColorBlind, settings, toggleSettings,
-                paymentMethods, updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, scheduleNotification,
-                activeTab, setActiveTab, restaurantLocation, setRestaurantLocation, language, changeLanguage, t,
-                updateOrderStatus, addRestaurant, deleteRestaurant, forgotPassword, savedAccounts, saveAccountToHistory,
-                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart, confirmPickup,
-                promotions, addPromotion, removePromotion
-            }}
-        >
+        <AppContext.Provider value={{
+            user, setUser, isLoading, hasSeenWelcome, restaurants, cart, orders, promotions, activeTab, setActiveTab,
+            language, changeLanguage, t, theme, isDarkMode, toggleTheme, colorBlindType, toggleColorBlind,
+            addToCart, removeFromCart, updateCartQuantity, clearCart, placeOrder, confirmPickup, updateOrderStatus,
+            logout, login, completeOnboarding, forgotPassword, checkUserInDatabase, verifyResetCode,
+            updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, saveAccountToHistory, savedAccounts,
+            addPromotion, removePromotion, addManualOrder, deleteRestaurant, addRestaurant, updateRestaurantMenu,
+            userLocation, userAddress, restaurantLocation, setRestaurantLocation, ownerRestaurantId: '2'
+        }}>
             {children}
         </AppContext.Provider>
     );
