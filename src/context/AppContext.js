@@ -7,7 +7,7 @@ import { restaurants as initialRestaurants, userProfile, ownerProfile } from '..
 import { translations } from '../data/translations';
 import { auth, db } from '../lib/firebase';
 import { onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, onSnapshot, orderBy, deleteDoc } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import { lightTheme, darkTheme, colorBlindLightTheme, colorBlindDarkTheme } from '../styles/theme';
 
@@ -17,17 +17,117 @@ export const AppProvider = ({ children }) => {
     const [restaurants, setRestaurants] = useState(initialRestaurants);
     const [cart, setCart] = useState([]);
     const [orders, setOrders] = useState([]);
-    // Firestore realtime listener for orders
+    const [promotions, setPromotions] = useState([]); // Custom promotions added by owners
+
+    // Firestore Listener for Promotions
     useEffect(() => {
-        const q = query(collection(db, 'orders'), orderBy('date', 'desc'));
+        if (!user) {
+            setPromotions([]);
+            return;
+        }
+
+        const q = query(collection(db, 'promotions'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            setOrders(fetchedOrders);
+            const fetchedPromos = snapshot.docs.map(doc => doc.data());
+            setPromotions(fetchedPromos);
+
+            // Sync menu prices with active promotions
+            setRestaurants(currentRestaurants => {
+                return currentRestaurants.map(r => {
+                    let menuChanged = false;
+                    const newMenu = r.menu.map(item => {
+                        // Check if there is an active promotion for this item in this restaurant
+                        const activePromo = fetchedPromos.find(p => p.restaurant?.id === r.id && p.title === item.name);
+
+                        if (activePromo) {
+                            // Apply promo price if different
+                            if (item.price !== activePromo.itemPrice) {
+                                menuChanged = true;
+                                return {
+                                    ...item,
+                                    price: activePromo.itemPrice,
+                                    originalPrice: item.originalPrice || item.price
+                                };
+                            }
+                        } else {
+                            // No active promo. If it has an originalPrice, revert it.
+                            if (item.originalPrice) {
+                                menuChanged = true;
+                                return {
+                                    ...item,
+                                    price: item.originalPrice,
+                                    originalPrice: undefined
+                                };
+                            }
+                        }
+                        return item;
+                    });
+
+                    if (menuChanged) return { ...r, menu: newMenu };
+                    return r;
+                });
+            });
+
         }, (error) => {
-            console.log("Firestore Snapshot Error (Silent):", error.message);
+            console.error("Error fetching promotions:", error);
         });
+
         return () => unsubscribe();
-    }, []);
+    }, [user]);
+
+
+    const addPromotion = async (promo) => {
+        try {
+            await setDoc(doc(db, 'promotions', promo.id), promo);
+        } catch (e) {
+            console.error("Failed to add promotion", e);
+        }
+    };
+
+    const removePromotion = async (promoId) => {
+        try {
+            await deleteDoc(doc(db, 'promotions', promoId));
+        } catch (e) {
+            console.error("Failed to remove promotion", e);
+        }
+    };
+
+    // Firestore realtime listener for orders - Moved inside to depend on user
+    useEffect(() => {
+        if (!user) {
+            setOrders([]);
+            return;
+        }
+
+        try {
+            // Filter by userId if not owner, or restaurantId if owner
+            // For now, simple filter to avoid 'Missing or insufficient permissions' on whole collection
+            const ordersRef = collection(db, 'orders');
+            let q;
+
+            if (user.isOwner) {
+                // Fetch ALL orders for the owner dashboard
+                // Note: If you have strict security rules (e.g. where('restaurantId', '==', ...)), this might need a where clause.
+                // Removing orderBy from query to avoid index issues; sorting client-side.
+                q = query(ordersRef);
+            } else {
+                q = query(ordersRef, where('userId', '==', user.uid));
+            }
+
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                // Client-side sort
+                fetchedOrders.sort((a, b) => new Date(b.date) - new Date(a.date));
+                setOrders(fetchedOrders);
+            }, (error) => {
+                console.log("Firestore Orders Error (Handled):", error.message);
+                // If permissions fail, we still have local history
+            });
+            return () => unsubscribe();
+        } catch (e) {
+            console.log("Listener Setup Error:", e.message);
+        }
+    }, [user?.uid, user?.isOwner, user?.restaurantId]);
 
     const [restaurantLocation, setRestaurantLocation] = useState({ latitude: -20.1609, longitude: 57.5050 });
     const [userLocation, setUserLocation] = useState(null);
@@ -205,9 +305,21 @@ export const AppProvider = ({ children }) => {
                     setUser(null);
                 }
             } catch (error) {
-                console.error("Firebase Auth state error:", error);
-                // On critical error, better to show login than a broken home
-                setUser(null);
+                if (error.code === 'permission-denied') {
+                    console.warn("Firestore access denied. Falling back to Auth only mode.");
+                    // Still set the user from Auth so app isn't stuck
+                    const fallbackUser = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email,
+                        name: firebaseUser.displayName || 'App User',
+                        photoUrl: firebaseUser.photoURL,
+                        isOwner: firebaseUser.email?.includes('owner') || firebaseUser.email === 'owner@gmail.com'
+                    };
+                    setUser(fallbackUser);
+                } else {
+                    console.error("Firebase Auth state error:", error);
+                    setUser(null);
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -436,7 +548,7 @@ export const AppProvider = ({ children }) => {
     };
 
     const placeOrder = async (paymentProof = null) => {
-        if (cart.length === 0) return;
+        if (cart.length === 0) return false;
         const firstItem = cart[0];
         const restaurant = restaurants.find(r => r.id === firstItem.restaurantId);
 
@@ -461,9 +573,11 @@ export const AppProvider = ({ children }) => {
         try {
             await addDoc(collection(db, 'orders'), newOrder);
             clearCart();
+            return true;
         } catch (e) {
             Alert.alert("Error", "Failed to place order. Check connection.");
             console.error(e);
+            return false;
         }
     };
 
@@ -481,6 +595,7 @@ export const AppProvider = ({ children }) => {
             await setDoc(orderRef, { status: newStatus }, { merge: true });
         } catch (e) {
             console.error("Failed to update status", e);
+            Alert.alert("Update Failed", "Could not update order status. Please check permissions or connection.");
         }
     };
 
@@ -493,7 +608,8 @@ export const AppProvider = ({ children }) => {
                 paymentMethods, updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, scheduleNotification,
                 activeTab, setActiveTab, restaurantLocation, setRestaurantLocation, language, changeLanguage, t,
                 updateOrderStatus, addRestaurant, deleteRestaurant, forgotPassword, savedAccounts, saveAccountToHistory,
-                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart, confirmPickup
+                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart, confirmPickup,
+                promotions, addPromotion, removePromotion
             }}
         >
             {children}

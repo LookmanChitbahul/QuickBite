@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, FlatList, TouchableOpacity, Image, StatusBar, A
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import QRCode from 'react-native-qrcode-svg';
 
 import QRCode from 'react-native-qrcode-svg';
 
@@ -35,7 +36,14 @@ export default function OrdersScreen({ navigation }) {
     return (
       <TouchableOpacity
         style={[styles.orderCard, { backgroundColor: theme.colors.card }]}
-        activeOpacity={0.9}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('Map', {
+          restaurant: {
+            name: item.restaurantName,
+            location: item.location || { latitude: -20.2443, longitude: 57.4882 }, // Fallback to Bagatelle
+            description: item.restaurantAddress
+          }
+        })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.storeInfo}>
@@ -93,8 +101,8 @@ export default function OrdersScreen({ navigation }) {
             )}
             {item.status === 'Awaiting Validation' && (
               <View style={[styles.trackBtn, { backgroundColor: theme.colors.primaryLight }]}>
-                <Text style={[styles.trackText, { color: theme.colors.primaryDark }]}>Awaiting Owner</Text>
-                <Ionicons name="hourglass-outline" size={14} color={theme.colors.primaryDark} />
+                <Text style={[styles.trackText, { color: theme.colors.primaryDark }]}>View Location</Text>
+                <Ionicons name="map" size={14} color={theme.colors.primaryDark} />
               </View>
             )}
           </View>
@@ -106,6 +114,19 @@ export default function OrdersScreen({ navigation }) {
             <Image source={{ uri: item.paymentProof }} style={styles.proofThumbSmall} />
           </View>
         )}
+
+        <View style={styles.qrSection}>
+          <Text style={[styles.qrTitle, { color: theme.colors.text }]}>Pickup QR Code</Text>
+          <View style={styles.qrWrapper}>
+            <QRCode
+              value={JSON.stringify({ orderId: item.id, restaurantId: item.restaurantId })}
+              size={140}
+              color="black"
+              backgroundColor="white"
+            />
+          </View>
+          <Text style={[styles.qrHint, { color: theme.colors.textLight }]}>Show this to the restaurant staff to confirm pickup</Text>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -269,51 +290,32 @@ const styles = StyleSheet.create({
   },
   proofLabel: { fontSize: 12, marginRight: 10, fontWeight: '600' },
   proofThumbSmall: { width: 40, height: 40, borderRadius: 4 },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
+  qrSection: {
+    marginTop: 15,
     alignItems: 'center',
-    padding: 20
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)'
   },
-  modalContent: {
-    width: '90%',
-    padding: 30,
-    borderRadius: 24,
-    alignItems: 'center'
-  },
-  modalTitle: {
-    fontSize: 22,
+  qrTitle: {
+    fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 10
   },
-  modalSubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 30
+  qrWrapper: {
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
   },
-  qrContainer: {
-    padding: 20,
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    marginBottom: 20
+  qrHint: {
+    fontSize: 11,
+    marginTop: 8,
+    fontStyle: 'italic',
+    textAlign: 'center'
   },
-  orderRef: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 30
-  },
-  closeBtn: {
-    width: '100%',
-    height: 54,
-    borderRadius: 27,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  closeBtnText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold'
-  }
 });

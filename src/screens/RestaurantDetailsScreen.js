@@ -7,8 +7,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 
 export default function RestaurantDetailsScreen({ route, navigation }) {
-    const { restaurant } = route.params || {};
-    const { cart, theme, isDarkMode, t, addToCart } = useApp();
+    const { restaurant: paramRestaurant } = route.params || {};
+    const { cart, theme, isDarkMode, t, addToCart, restaurants } = useApp();
+
+    // Use the live restaurant object from global state to get real-time price updates
+    const restaurant = restaurants.find(r => r.id === paramRestaurant?.id) || paramRestaurant;
     const [activeMenuCat, setActiveMenuCat] = React.useState(t('featured') || 'Featured');
 
     const cartCount = cart.filter(item => item.restaurantId === restaurant.id).reduce((sum, item) => sum + item.quantity, 0);

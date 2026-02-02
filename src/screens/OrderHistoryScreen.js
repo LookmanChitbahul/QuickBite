@@ -29,9 +29,20 @@ export default function OrderHistoryScreen({ navigation }) {
 
     const renderOrderItem = ({ item }) => {
         const isCompleted = item.status === 'Picked Up';
+        const isActive = !isCompleted && item.status !== 'Cancelled' && item.status !== 'Payment Rejected';
 
         return (
-            <View style={[styles.orderCard, { backgroundColor: theme.colors.card }]}>
+            <TouchableOpacity
+                style={[styles.orderCard, { backgroundColor: theme.colors.card }]}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('Map', {
+                    restaurant: {
+                        name: item.restaurantName,
+                        location: item.location || { latitude: -20.2443, longitude: 57.4882 },
+                        description: item.restaurantAddress
+                    }
+                })}
+            >
                 <View style={styles.cardHeader}>
                     <View style={styles.storeInfo}>
                         <View style={[styles.logoPlaceholder, { backgroundColor: isCompleted ? theme.colors.success : theme.colors.primary }]}>
@@ -46,7 +57,7 @@ export default function OrderHistoryScreen({ navigation }) {
                     <View style={{ alignItems: 'flex-end' }}>
                         <Text style={[
                             styles.statusBadge,
-                            item.status === 'Picked Up'
+                            (isCompleted || item.status === 'Confirmed')
                                 ? { backgroundColor: theme.colors.successLight, color: theme.colors.success }
                                 : item.status === 'Payment Rejected'
                                     ? { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' }
@@ -73,6 +84,12 @@ export default function OrderHistoryScreen({ navigation }) {
 
                 <View style={styles.cardFooter}>
                     <Text style={[styles.totalText, { color: theme.colors.text }]}>{t('total')}: Rs {item.total.toFixed(2)}</Text>
+                    {isActive && (
+                        <View style={[styles.trackBtn, { backgroundColor: theme.colors.primaryLight }]}>
+                            <Text style={[styles.trackText, { color: theme.colors.primaryDark }]}>View Location</Text>
+                            <Ionicons name="map" size={14} color={theme.colors.primaryDark} />
+                        </View>
+                    )}
                 </View>
 
                 {item.paymentProof && (
@@ -82,7 +99,7 @@ export default function OrderHistoryScreen({ navigation }) {
                     </View>
                 )}
 
-                {item.status === 'Confirmed' && (
+                {isActive && (
                     <View style={styles.qrSection}>
                         <Text style={[styles.qrTitle, { color: theme.colors.text }]}>Pickup QR Code</Text>
                         <View style={styles.qrWrapper}>
@@ -96,7 +113,7 @@ export default function OrderHistoryScreen({ navigation }) {
                         <Text style={[styles.qrHint, { color: theme.colors.textLight }]}>Show this to the restaurant staff to confirm pickup</Text>
                     </View>
                 )}
-            </View>
+            </TouchableOpacity>
         );
     };
 
@@ -239,5 +256,7 @@ const styles = StyleSheet.create({
         height: 150,
         borderRadius: 12,
         backgroundColor: '#F3F4F6'
-    }
+    },
+    trackBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    trackText: { fontSize: 12, fontWeight: 'bold', marginRight: 4 },
 });
