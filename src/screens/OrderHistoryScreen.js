@@ -46,14 +46,19 @@ export default function OrderHistoryScreen({ navigation }) {
                     <View style={{ alignItems: 'flex-end' }}>
                         <Text style={[
                             styles.statusBadge,
-                            isCompleted
+                            item.status === 'Picked Up'
                                 ? { backgroundColor: theme.colors.successLight, color: theme.colors.success }
-                                : { backgroundColor: theme.colors.input, color: theme.colors.muted }
+                                : item.status === 'Payment Rejected'
+                                    ? { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' }
+                                    : { backgroundColor: theme.colors.input, color: theme.colors.muted }
                         ]}>
                             {item.status}
                         </Text>
-                        {isCompleted && (
+                        {item.status === 'Picked Up' && (
                             <Ionicons name="checkmark-done-circle" size={24} color={theme.colors.success} style={{ marginTop: 4 }} />
+                        )}
+                        {item.status === 'Payment Rejected' && (
+                            <Ionicons name="close-circle" size={24} color="#EF4444" style={{ marginTop: 4 }} />
                         )}
                     </View>
                 </View>
@@ -77,7 +82,7 @@ export default function OrderHistoryScreen({ navigation }) {
                     </View>
                 )}
 
-                {!isCompleted && (
+                {item.status === 'Confirmed' && (
                     <View style={styles.qrSection}>
                         <Text style={[styles.qrTitle, { color: theme.colors.text }]}>Pickup QR Code</Text>
                         <View style={styles.qrWrapper}>
@@ -136,7 +141,7 @@ export default function OrderHistoryScreen({ navigation }) {
                 </View>
             ) : (
                 <FlatList
-                    data={orders}
+                    data={orders.filter(o => o.status === 'Picked Up' || o.status === 'Payment Rejected')}
                     keyExtractor={item => item.id}
                     renderItem={renderOrderItem}
                     contentContainerStyle={styles.listContent}

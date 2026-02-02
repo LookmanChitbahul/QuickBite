@@ -38,8 +38,7 @@ export default function OwnerDashboardScreen({ navigation }) {
     const [isResPickerVisible, setIsResPickerVisible] = useState(false);
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewContent, setPreviewContent] = useState(null);
-    const [isArTestVisible, setIsArTestVisible] = useState(false);
-    const [arTestLoc, setArTestLoc] = useState({ lat: '-20.2443', lng: '57.4882', name: 'Test Place' });
+
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -199,23 +198,7 @@ export default function OwnerDashboardScreen({ navigation }) {
         }
     };
 
-    const handleTestAr = () => {
-        const lat = parseFloat(arTestLoc.lat);
-        const lng = parseFloat(arTestLoc.lng);
-        if (isNaN(lat) || isNaN(lng)) {
-            Alert.alert("Error", "Invalid coordinates");
-            return;
-        }
-        setIsArTestVisible(false);
-        navigation.navigate('ARScreen', {
-            restaurant: {
-                id: 'test_ar',
-                name: arTestLoc.name,
-                location: { latitude: lat, longitude: lng },
-                description: 'Manual AR Test Location'
-            }
-        });
-    };
+
 
     const handleGenerateReport = async () => {
         const selectedRes = restaurants.find(r => r.id === revenueResId);
@@ -592,12 +575,7 @@ export default function OwnerDashboardScreen({ navigation }) {
                     <Text style={[styles.actionText, { color: textColor }]}>Delete Rest.</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.actionCard, { backgroundColor: cardBg }]} onPress={() => setIsArTestVisible(true)}>
-                    <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE' }]}>
-                        <Ionicons name="cube" size={32} color="#8B5CF6" />
-                    </View>
-                    <Text style={[styles.actionText, { color: textColor }]}>Test AR</Text>
-                </TouchableOpacity>
+
             </View>
 
             {/* Add Restaurant Modal */}
@@ -794,50 +772,6 @@ export default function OwnerDashboardScreen({ navigation }) {
                 </View>
             </Modal>
 
-            {/* AR Test Modal */}
-            <Modal visible={isArTestVisible} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
-                        <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: textColor }]}>AR Location Test</Text>
-                            <TouchableOpacity onPress={() => setIsArTestVisible(false)}>
-                                <Ionicons name="close" size={24} color={textColor} />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={{ color: subTextColor, marginBottom: 15 }}>Enter coordinates to test AR view.</Text>
-
-                        <TextInput
-                            placeholder="Place Name"
-                            placeholderTextColor={subTextColor}
-                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
-                            value={arTestLoc.name}
-                            onChangeText={t => setArTestLoc({ ...arTestLoc, name: t })}
-                        />
-                        <TextInput
-                            placeholder="Latitude (e.g. -20.24)"
-                            placeholderTextColor={subTextColor}
-                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
-                            value={arTestLoc.lat}
-                            keyboardType="default" // Allow negative signs and dots freely
-                            onChangeText={t => setArTestLoc({ ...arTestLoc, lat: t })}
-                        />
-                        <TextInput
-                            placeholder="Longitude (e.g. 57.48)"
-                            placeholderTextColor={subTextColor}
-                            style={[styles.input, { color: textColor, borderColor: borderColor, marginBottom: 12 }]}
-                            value={arTestLoc.lng}
-                            keyboardType="default" // Allow negative signs and dots freely
-                            onChangeText={t => setArTestLoc({ ...arTestLoc, lng: t })}
-                        />
-
-                        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#8B5CF6' }]} onPress={handleTestAr}>
-                            <Text style={styles.saveBtnText}>Launch AR View</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* QR Scanner Modal */}
             {/* QR Scanner Modal */}
             <Modal visible={scanning} animationType="slide" transparent={false} presentationStyle="fullScreen">
                 <View style={[styles.scannerContainer, { flex: 1, backgroundColor: 'black' }]}>
@@ -848,15 +782,14 @@ export default function OwnerDashboardScreen({ navigation }) {
                         }}
                         style={[StyleSheet.absoluteFillObject, { flex: 1 }]}
                     />
-                    <View style={[styles.scannerOverlay, { flex: 1, justifyContent: 'space-between', paddingVertical: 50 }]}>
-                        <View style={styles.scannerHeader}>
-                            <Text style={styles.scannerTitle}>Scan Customer QR</Text>
-                            <TouchableOpacity onPress={() => setScanning(false)} style={styles.scannerClose}>
-                                <Ionicons name="close-circle" size={40} color="#fff" />
-                            </TouchableOpacity>
+                    <View style={styles.scannerOverlay}>
+                        <TouchableOpacity onPress={() => setScanning(false)} style={styles.scannerClose}>
+                            <Ionicons name="close-circle" size={44} color="#fff" />
+                        </TouchableOpacity>
+
+                        <View style={styles.scannerFrameContainer}>
+                            <View style={styles.scannerBox} />
                         </View>
-                        <View style={styles.scannerBox} />
-                        <Text style={styles.scannerHint}>Align the QR code within the frame</Text>
                     </View>
                 </View>
             </Modal>
@@ -1102,5 +1035,39 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: 13,
         paddingVertical: 10,
+    },
+    // Scanner Styles
+    scannerContainer: {
+        flex: 1,
+    },
+    scannerOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    scannerClose: {
+        position: 'absolute',
+        top: 60,
+        right: 30,
+        zIndex: 10,
+    },
+    scannerFrameContainer: {
+        width: 280,
+        height: 280,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    scannerBox: {
+        width: 250,
+        height: 250,
+        borderWidth: 2,
+        borderColor: '#F97316',
+        borderRadius: 24,
+        backgroundColor: 'transparent',
+        shadowColor: '#F97316',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 10,
     }
 });

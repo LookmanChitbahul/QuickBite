@@ -39,7 +39,11 @@ export const restaurants = [
         description: 'Finger Lickin Good! Town Center.',
         bankDetails: { bank: 'MCB', account: '000123456789', name: 'KFC Mauritius Ltd', juice: '57771111' },
         menu: [
-            { id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+            { id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k2', name: 'Zinger Box Meal', price: 320, description: 'Zinger burger, 2 wings, chips and drink', image: 'https://images.unsplash.com/photo-1521305916504-4a1121188589?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k3', name: 'Colonel Burger', price: 210, description: 'The original chicken burger', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k4', name: 'Hot Wings (6pcs)', price: 180, description: 'Spicy and crunchy chicken wings', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k5', name: 'Twister', price: 195, description: 'Toasted wrap with spicy strips', image: 'https://images.unsplash.com/photo-1553909489-cd47e0907980?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
         ],
         hours: '10:00 AM - 10:00 PM',
         tags: ['Chicken', 'Fast Food', 'Halal']
@@ -58,7 +62,13 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1513639776629-7b61b0ac49cb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Finger Lickin Good! Desforges Street.',
         bankDetails: { bank: 'MCB', account: '000123456789', name: 'KFC Mauritius Ltd', juice: '57771111' },
-        menu: [{ id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k2', name: 'Zinger Box Meal', price: 320, description: 'Zinger burger, 2 wings, chips and drink', image: 'https://images.unsplash.com/photo-1521305916504-4a1121188589?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k3', name: 'Colonel Burger', price: 210, description: 'The original chicken burger', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k4', name: 'Hot Wings (6pcs)', price: 180, description: 'Spicy and crunchy chicken wings', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k5', name: 'Twister', price: 195, description: 'Toasted wrap with spicy strips', image: 'https://images.unsplash.com/photo-1553909489-cd47e0907980?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '10:00 AM - 10:00 PM',
         tags: ['Chicken', 'Fast Food', 'Halal']
     },
@@ -76,7 +86,13 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1513639776629-7b61b0ac49cb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Finger Lickin Good! La Croisette.',
         bankDetails: { bank: 'MCB', account: '000123456789', name: 'KFC Mauritius Ltd', juice: '57771111' },
-        menu: [{ id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k2', name: 'Zinger Box Meal', price: 320, description: 'Zinger burger, 2 wings, chips and drink', image: 'https://images.unsplash.com/photo-1521305916504-4a1121188589?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k3', name: 'Colonel Burger', price: 210, description: 'The original chicken burger', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k4', name: 'Hot Wings (6pcs)', price: 180, description: 'Spicy and crunchy chicken wings', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k5', name: 'Twister', price: 195, description: 'Toasted wrap with spicy strips', image: 'https://images.unsplash.com/photo-1553909489-cd47e0907980?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '10:00 AM - 11:00 PM',
         tags: ['Chicken', 'Fast Food', 'Halal']
     },
@@ -94,7 +110,13 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1513639776629-7b61b0ac49cb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Finger Lickin Good! Cascavelle Shopping Mall.',
         bankDetails: { bank: 'MCB', account: '000123456789', name: 'KFC Mauritius Ltd', juice: '57771111' },
-        menu: [{ id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'k1', name: '18-Piece Bucket', price: 1450, description: '18 pieces of original recipe chicken', image: 'https://images.unsplash.com/photo-1626645275203-44016264a919?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k2', name: 'Zinger Box Meal', price: 320, description: 'Zinger burger, 2 wings, chips and drink', image: 'https://images.unsplash.com/photo-1521305916504-4a1121188589?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k3', name: 'Colonel Burger', price: 210, description: 'The original chicken burger', image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k4', name: 'Hot Wings (6pcs)', price: 180, description: 'Spicy and crunchy chicken wings', image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'k5', name: 'Twister', price: 195, description: 'Toasted wrap with spicy strips', image: 'https://images.unsplash.com/photo-1553909489-cd47e0907980?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '10:00 AM - 11:00 PM',
         tags: ['Chicken', 'Fast Food', 'Halal']
     },
@@ -107,7 +129,7 @@ export const restaurants = [
         address: 'Port Louis, Mauritius',
         city: 'Port Louis',
         phone: '+230 208 3588',
-        location: { latitude: -20.16142, longitude: 57.501342250956306 },
+        location: { latitude: -20.16142, longitude: 57.50093 },
         rating: 4.5,
         reviews: 1800,
         distance: '10.5 km',
@@ -137,7 +159,12 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Im Lovin It! Phoenix Mall.',
         bankDetails: { bank: 'SBM', account: '10122334455', name: 'McD Mauritius', juice: '58882222' },
-        menu: [{ id: 'm1', name: 'Big Mac™', price: 240, description: 'Double beef patty with special sauce', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'm1', name: 'Big Mac™', price: 240, description: 'Double beef patty with special sauce', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm2', name: 'McChicken™', price: 190, description: 'Classical chicken sandwich', image: 'https://images.unsplash.com/photo-1610440042657-6dd2c44c5e27?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm3', name: 'Nuggets (9pcs)', price: 175, description: 'Golden crispy chicken nuggets', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm4', name: 'Quarter Pounder', price: 260, description: 'Fresh beef with melted cheese', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3ecc50f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '08:00 AM - 10:00 PM',
         tags: ['Burgers', 'Family', 'Halal']
     },
@@ -155,7 +182,12 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Im Lovin It! Grand Baie.',
         bankDetails: { bank: 'SBM', account: '10122334455', name: 'McD Mauritius', juice: '58882222' },
-        menu: [{ id: 'm1', name: 'Big Mac™', price: 240, description: 'Double beef patty with special sauce', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'm1', name: 'Big Mac™', price: 240, description: 'Double beef patty with special sauce', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm2', name: 'McChicken™', price: 190, description: 'Classical chicken sandwich', image: 'https://images.unsplash.com/photo-1610440042657-6dd2c44c5e27?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm3', name: 'Nuggets (9pcs)', price: 175, description: 'Golden crispy chicken nuggets', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm4', name: 'Quarter Pounder', price: 260, description: 'Fresh beef with melted cheese', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3ecc50f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '08:00 AM - 11:30 PM',
         tags: ['Burgers', 'Family', 'Halal']
     },
@@ -173,7 +205,12 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1552566626-52f8b828add9?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Im Lovin It! Riche Terre Mall.',
         bankDetails: { bank: 'SBM', account: '10122334455', name: 'McD Mauritius', juice: '58882222' },
-        menu: [{ id: 'm1', name: 'Big Mac™', price: 240, description: 'Double beef patty with special sauce', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'm1', name: 'Big Mac™', price: 240, description: 'Double beef patty with special sauce', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm2', name: 'McChicken™', price: 190, description: 'Classical chicken sandwich', image: 'https://images.unsplash.com/photo-1610440042657-6dd2c44c5e27?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm3', name: 'Nuggets (9pcs)', price: 175, description: 'Golden crispy chicken nuggets', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'm4', name: 'Quarter Pounder', price: 260, description: 'Fresh beef with melted cheese', image: 'https://images.unsplash.com/photo-1594212699903-ec8a3ecc50f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '09:00 AM - 10:00 PM',
         tags: ['Burgers', 'Family', 'Halal']
     },
@@ -216,7 +253,12 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Hot Pizza in the City.',
         bankDetails: { bank: 'MCB', account: '000998877665', name: 'Dominos Pizza MU', juice: '59993333' },
-        menu: [{ id: 'd1', name: 'Chicken Mayo Pizza', price: 420, description: 'Creamy mayo with grilled chicken', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'd1', name: 'Chicken Mayo Pizza', price: 420, description: 'Creamy mayo with grilled chicken', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'd2', name: 'Pepperoni Passion', price: 465, description: 'Double pepperoni and extra cheese', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'd3', name: 'Stuffed Cheesy Bread', price: 210, description: '8 pieces of filled cheesy bread', image: 'https://images.unsplash.com/photo-1594224155-1697467265d7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'd4', name: 'Veggie Supreme', price: 380, description: 'Mushrooms, peppers, and onions', image: 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '11:00 AM - 09:00 PM',
         tags: ['Pizza', 'Italian', 'Delivery']
     },
@@ -234,7 +276,12 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Fresh Pizza Curepipe.',
         bankDetails: { bank: 'MCB', account: '000998877665', name: 'Dominos Pizza MU', juice: '59993333' },
-        menu: [{ id: 'd1', name: 'Chicken Mayo Pizza', price: 420, description: 'Creamy mayo with grilled chicken', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'd1', name: 'Chicken Mayo Pizza', price: 420, description: 'Creamy mayo with grilled chicken', image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'd2', name: 'Pepperoni Passion', price: 465, description: 'Double pepperoni and extra cheese', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'd3', name: 'Stuffed Cheesy Bread', price: 210, description: '8 pieces of filled cheesy bread', image: 'https://images.unsplash.com/photo-1594224155-1697467265d7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'd4', name: 'Veggie Supreme', price: 380, description: 'Mushrooms, peppers, and onions', image: 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '11:00 AM - 09:30 PM',
         tags: ['Pizza', 'Italian', 'Delivery']
     },
@@ -276,7 +323,11 @@ export const restaurants = [
         image: 'https://images.unsplash.com/photo-1551731591-a2432441f94a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80',
         description: 'Seafood at Phoenix Mall.',
         bankDetails: { bank: 'Absa', account: '404050506060', name: 'Ocean Basket MU', juice: '52224444' },
-        menu: [{ id: 'o1', name: 'Platter for 2', price: 1850, description: 'Prawns, calamari, mussels and fish', image: 'https://images.unsplash.com/photo-1534080564617-59718db9e925?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }],
+        menu: [
+            { id: 'o1', name: 'Platter for 2', price: 1850, description: 'Prawns, calamari, mussels and fish', image: 'https://images.unsplash.com/photo-1534080564617-59718db9e925?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'o2', name: 'Grilled Fish & Chips', price: 520, description: 'Freshly grilled hake with chips', image: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' },
+            { id: 'o3', name: 'Famous Prawns (12)', price: 650, description: 'Grilled prawns with garlic butter', image: 'https://images.unsplash.com/photo-1559135031-61580983196f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60' }
+        ],
         hours: '12:00 PM - 10:00 PM',
         tags: ['Seafood', 'Family', 'Casual']
 

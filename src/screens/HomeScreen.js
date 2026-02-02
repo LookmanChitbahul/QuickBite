@@ -6,6 +6,7 @@ import SearchBar from '../components/SearchBar';
 import RestaurantList from '../components/RestaurantList';
 import { useApp } from '../context/AppContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import QRCode from 'react-native-qrcode-svg';
 
 const { width } = Dimensions.get('window');
 
@@ -32,6 +33,9 @@ export default function HomeScreen({ navigation }) {
   const [filteredRestaurants, setFilteredRestaurants] = useState(uniqueBrandRestaurants);
   const [showNotifications, setShowNotifications] = useState(false);
   const slideAnim = useRef(new Animated.Value(width)).current;
+
+  const [showOffers, setShowOffers] = useState(false);
+  const offersSlideAnim = useRef(new Animated.Value(width)).current;
 
   // Carousel state
   const promoListRef = useRef(null);
@@ -75,8 +79,8 @@ export default function HomeScreen({ navigation }) {
 
   const [activeCategory, setActiveCategory] = useState(null);
 
-  const activeOrderCount = useMemo(() => orders.filter(o => o.status !== 'Picked Up').length, [orders]);
-  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Picked Up'), [orders]);
+  const activeOrderCount = useMemo(() => orders.filter(o => o.status !== 'Picked Up' && o.status !== 'Payment Rejected').length, [orders]);
+  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Picked Up' && o.status !== 'Payment Rejected'), [orders]);
   const latestOrder = useMemo(() => activeOrders.length > 0 ? activeOrders[0] : null, [activeOrders]);
 
   const toggleNotifications = (show) => {
@@ -95,6 +99,25 @@ export default function HomeScreen({ navigation }) {
         easing: Easing.in(Easing.ease),
         useNativeDriver: true,
       }).start(() => setShowNotifications(false));
+    }
+  };
+
+  const toggleOffers = (show) => {
+    if (show) {
+      setShowOffers(true);
+      Animated.timing(offersSlideAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.back(0.5)),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(offersSlideAnim, {
+        toValue: width,
+        duration: 250,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => setShowOffers(false));
     }
   };
 
@@ -159,118 +182,215 @@ export default function HomeScreen({ navigation }) {
           activeOpacity={1}
           onPress={() => toggleNotifications(false)}
         >
-          <Animated.View
-            style={[
-              styles.sideDrawer,
-              {
-                backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                transform: [{ translateX: slideAnim }]
-              }
-            ]}
-          >
-            <SafeAreaView style={{ flex: 1 }}>
-              <View style={styles.drawerHeader}>
-                <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>{t('notifications')}</Text>
-                <TouchableOpacity onPress={() => toggleNotifications(false)}>
-                  <Ionicons name="close" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
+          <TouchableWithoutFeedback>
+            <Animated.View
+              style={[
+                styles.sideDrawer,
+                {
+                  backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                  transform: [{ translateX: slideAnim }]
+                }
+              ]}
+            >
+              <SafeAreaView style={{ flex: 1 }}>
+                <View style={styles.drawerHeader}>
+                  <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>{t('notifications')}</Text>
+                  <TouchableOpacity onPress={() => toggleNotifications(false)}>
+                    <Ionicons name="close" size={24} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
 
-              <ScrollView style={styles.drawerContent} showsVerticalScrollIndicator={false}>
-                {latestOrder ? (
-                  <View style={[styles.notiCard, { backgroundColor: theme.colors.card }]}>
-                    <View style={styles.notiHeader}>
-                      <View style={[styles.notiIcon, { backgroundColor: theme.colors.primaryLight }]}>
-                        <Ionicons name="receipt" size={20} color={theme.colors.primary} />
+                <ScrollView
+                  style={styles.drawerContent}
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={{ paddingBottom: 60 }}
+                  nestedScrollEnabled={true}
+                  alwaysBounceVertical={true}
+                >
+                  {/* Active Orders Section */}
+                  <View style={styles.notiSectionHeader}>
+                    <Text style={[styles.notiSectionTitle, { color: theme.colors.text }]}>Active Orders</Text>
+                  </View>
+
+                  {activeOrders.length > 0 ? (
+                    activeOrders.map((order) => (
+                      <View key={order.id} style={[styles.notiCard, { backgroundColor: theme.colors.card }]}>
+                        <View style={styles.notiHeader}>
+                          <View style={[styles.notiIcon, { backgroundColor: order.status === 'Confirmed' ? '#10B98120' : theme.colors.primaryLight }]}>
+                            <Ionicons
+                              name={order.status === 'Confirmed' ? "checkmark-circle" : "time-outline"}
+                              size={20}
+                              color={order.status === 'Confirmed' ? '#10B981' : theme.colors.primary}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.notiType, { color: theme.colors.text }]}>Order Update</Text>
+                            <Text style={[styles.notiTime, { color: theme.colors.textLight }]}>{t('now')}</Text>
+                          </View>
+                          <View style={[styles.statusPill, { backgroundColor: order.status === 'Confirmed' ? '#10B981' : '#F97316' }]}>
+                            <Text style={styles.statusPillText}>{order.status.toUpperCase()}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.notiDetails}>
+                          <Text style={[styles.notiInfo, { color: theme.colors.text }]}>Your order from {order.restaurantName} is {order.status.toLowerCase()}.</Text>
+
+                          <View style={[styles.notiDivider, { backgroundColor: theme.colors.border }]} />
+
+                          <Text style={[styles.notiSummaryTitle, { color: theme.colors.textLight }]}>{t('payment_summary')}</Text>
+                          {order.items.map((item, idx) => (
+                            <Text key={idx} style={[styles.notiItem, { color: theme.colors.text }]}>
+                              {item.quantity}x {item.name}
+                            </Text>
+                          ))}
+                          <Text style={[styles.notiTotal, { color: theme.colors.text }]}>{t('total')}: Rs {order.total.toFixed(2)}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.notiAction, { backgroundColor: theme.colors.primary }]}
+                          onPress={() => {
+                            let restaurant = restaurants.find(r => r.id === order.restaurantId) || restaurants.find(r => r.name === order.restaurantName);
+                            toggleNotifications(false);
+                            let targetLoc = restaurant ? restaurant.location : order.location;
+                            setTimeout(() => {
+                              setActiveTab('Map');
+                              navigation.navigate('Map', {
+                                restaurant: restaurant || { name: order.restaurantName, location: targetLoc },
+                                location: targetLoc
+                              });
+                            }, 350);
+                          }}
+                        >
+                          <Text style={styles.notiActionText}>Show Location</Text>
+                          <Ionicons name="location-outline" size={16} color="#fff" />
+                        </TouchableOpacity>
+
+                        {order.status === 'Confirmed' && (
+                          <View style={styles.notiQRSection}>
+                            <Text style={[styles.notiQRTitle, { color: theme.colors.text }]}>Verification QR Code</Text>
+                            <View style={styles.notiQRInside}>
+                              <QRCode
+                                value={JSON.stringify({ orderId: order.id, type: 'pickup' })}
+                                size={120}
+                                color={isDarkMode ? '#FFF' : '#000'}
+                                backgroundColor='transparent'
+                              />
+                            </View>
+                            <Text style={[styles.notiQRHint, { color: theme.colors.textLight }]}>Show this at the counter for pickup</Text>
+                          </View>
+                        )}
                       </View>
-                      <View>
-                        <Text style={[styles.notiType, { color: theme.colors.text }]}>Order Update</Text>
-                        <Text style={[styles.notiTime, { color: theme.colors.textLight }]}>{t('now')}</Text>
+                    ))
+                  ) : (
+                    <View style={styles.notiCardEmpty}>
+                      <Text style={[styles.notiEmptyText, { color: theme.colors.textLight }]}>No active orders at the moment.</Text>
+                    </View>
+                  )}
+
+                  {/* Order History Section */}
+                  <View style={[styles.notiSectionHeader, { marginTop: 30 }]}>
+                    <Text style={[styles.notiSectionTitle, { color: theme.colors.text }]}>Recent History</Text>
+                  </View>
+
+                  {orders.filter(o => o.status === 'Picked Up' || o.status === 'Payment Rejected').slice(0, 5).map((order) => (
+                    <View key={order.id} style={[styles.notiHistoryItem, { borderBottomColor: theme.colors.border }]}>
+                      <View style={[styles.historyIcon, { backgroundColor: order.status === 'Picked Up' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                        <Ionicons name={order.status === 'Picked Up' ? "checkmark" : "close"} size={14} color={order.status === 'Picked Up' ? '#10B981' : '#EF4444'} />
                       </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[styles.historyTitle, { color: theme.colors.text }]} numberOfLines={1}>{order.restaurantName}</Text>
+                        <Text style={[styles.historySubtitle, { color: theme.colors.textLight }]}>{order.status} • Rs {order.total.toFixed(0)}</Text>
+                      </View>
+                      <Text style={[styles.historyDate, { color: theme.colors.textLight }]}>{new Date(order.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
                     </View>
+                  ))}
 
-                    <View style={styles.notiDetails}>
-                      <Text style={[styles.notiStatus, { color: theme.colors.primary }]}>{latestOrder.status}</Text>
-                      <Text style={[styles.notiInfo, { color: theme.colors.text }]}>Your order from {latestOrder.restaurantName} is being {latestOrder.status.toLowerCase()}.</Text>
+                  <TouchableOpacity
+                    style={[styles.viewAllHistoryBtn, { marginTop: 15 }]}
+                    onPress={() => {
+                      toggleNotifications(false);
+                      setActiveTab('Orders');
+                    }}
+                  >
+                    <Text style={[styles.viewAllHistoryText, { color: theme.colors.primary }]}>View Detailed History</Text>
+                    <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </ScrollView>
+              </SafeAreaView>
+            </Animated.View>
+          </TouchableWithoutFeedback>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
 
-                      <View style={[styles.notiDivider, { backgroundColor: theme.colors.border }]} />
+  const OffersPopup = () => {
+    return (
+      <Modal
+        visible={showOffers}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => toggleOffers(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => toggleOffers(false)}
+        >
+          <TouchableWithoutFeedback>
+            <Animated.View
+              style={[
+                styles.sideDrawer,
+                {
+                  backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.98)' : 'rgba(255, 255, 255, 0.98)',
+                  transform: [{ translateX: offersSlideAnim }]
+                }
+              ]}
+            >
+              <SafeAreaView style={{ flex: 1 }}>
+                <View style={styles.drawerHeader}>
+                  <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>Limited Offers</Text>
+                  <TouchableOpacity onPress={() => toggleOffers(false)}>
+                    <Ionicons name="close" size={24} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
 
-                      <Text style={[styles.notiSummaryTitle, { color: theme.colors.textLight }]}>{t('payment_summary')}</Text>
-                      {latestOrder.items.map((item, idx) => (
-                        <Text key={idx} style={[styles.notiItem, { color: theme.colors.text }]}>
-                          {item.quantity}x {item.name}
-                        </Text>
-                      ))}
-                      <Text style={[styles.notiTotal, { color: theme.colors.text }]}>{t('total')}: Rs {latestOrder.total.toFixed(2)}</Text>
-                    </View>
-
+                <ScrollView style={styles.drawerContent} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 40 }}>
+                  {promotions.map((promo) => (
                     <TouchableOpacity
-                      style={[styles.notiAction, { backgroundColor: theme.colors.primary }]}
+                      key={promo.id}
+                      style={[styles.offerListItem, { backgroundColor: isDarkMode ? '#1F2937' : '#F9FAFB' }]}
                       onPress={() => {
-                        // Robust lookup: try ID first, then name fallback
-                        let restaurant = restaurants.find(r => r.id === latestOrder.restaurantId);
-                        if (!restaurant) {
-                          restaurant = restaurants.find(r => r.name === latestOrder.restaurantName);
-                        }
-
-                        // If still not found, search by Brand substring (e.g. 'KFC')
-                        if (!restaurant && latestOrder.restaurantName) {
-                          const brand = latestOrder.restaurantName.split(' ')[0];
-                          restaurant = restaurants.find(r => r.brand === brand || r.name.includes(brand));
-                        }
-
-                        toggleNotifications(false);
-
-                        // Fallback Hardcoded Coordinates for accuracy
-                        let targetLoc = restaurant ? restaurant.location : null;
-
-                        if (!targetLoc && latestOrder.restaurantName) {
-                          const name = latestOrder.restaurantName.toLowerCase();
-                          if (name.includes('bagatelle')) targetLoc = { latitude: -20.22427, longitude: 57.49660 };
-                          else if (name.includes('port louis')) targetLoc = { latitude: -20.16325, longitude: 57.49749 };
-                          else if (name.includes('curepipe')) targetLoc = { latitude: -20.32165, longitude: 57.52648 };
-                          else if (name.includes('grand baie')) targetLoc = { latitude: -20.02163, longitude: 57.57792 };
-                          else if (name.includes('phoenix')) targetLoc = { latitude: -20.27648, longitude: 57.50576 };
-                        }
-
-                        if (!targetLoc) targetLoc = latestOrder.location; // Final fallback
-
-                        setTimeout(() => {
-                          setActiveTab('Map');
-                          navigation.navigate('Map', {
-                            restaurant: restaurant || {
-                              name: latestOrder.restaurantName,
-                              location: targetLoc,
-                              description: 'Order Pickup Location',
-                              address: 'Mauritius'
-                            },
-                            location: targetLoc
-                          });
-                        }, 350);
+                        toggleOffers(false);
+                        handleRestaurantPress(promo.restaurant);
                       }}
                     >
-                      <Text style={styles.notiActionText}>Show Location</Text>
-                      <Ionicons name="location-outline" size={16} color="#fff" />
+                      <Image source={{ uri: promo.image }} style={styles.offerItemImage} />
+                      <View style={styles.offerItemDetails}>
+                        <Text style={[styles.offerItemTitle, { color: theme.colors.text }]}>{promo.title}</Text>
+                        <Text style={[styles.offerItemSubtitle, { color: theme.colors.textLight }]}>{promo.subtitle}</Text>
+                        <View style={styles.offerItemFooter}>
+                          <Text style={[styles.offerItemPrice, { color: theme.colors.primary }]}>Rs {promo.itemPrice}</Text>
+                          <View style={styles.claimBadge}>
+                            <Text style={styles.claimBadgeText}>CLAIM</Text>
+                          </View>
+                        </View>
+                      </View>
                     </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.emptyNoti}>
-                    <Ionicons name="notifications-off-outline" size={48} color={theme.colors.muted} />
-                    <Text style={[styles.emptyNotiText, { color: theme.colors.muted }]}>{t('no_notifications')}</Text>
-                  </View>
-                )}
-              </ScrollView>
-            </SafeAreaView>
-          </Animated.View>
+                  ))}
+                </ScrollView>
+              </SafeAreaView>
+            </Animated.View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
     );
   };
 
   const ActiveOrderPanel = () => {
-    const activeOrders = orders.filter(o => o.status !== 'Picked Up');
-    if (activeOrders.length === 0) return null;
-    const latestOrder = activeOrders[0];
+    const activeOrdersList = activeOrders; // Using the memoized one from outer scope
+    if (activeOrdersList.length === 0) return null;
+    const latestOrder = activeOrdersList[0];
 
     return (
       <View style={styles.activeOrderContainer}>
@@ -337,55 +457,57 @@ export default function HomeScreen({ navigation }) {
     </ScrollView>
   );
 
-  const PromoCarousel = () => (
-    <FlatList
-      ref={promoListRef}
-      data={promotions}
-      keyExtractor={(item) => item.id}
-      horizontal
-      scrollEnabled={true}
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.promoCarousel}
-      decelerationRate="fast"
-      snapToInterval={width - 25}
-      snapToAlignment="start"
-      getItemLayout={(data, index) => ({
-        length: width - 25,
-        offset: (width - 25) * index,
-        index,
-      })}
-      renderItem={({ item: promo }) => (
+  const OffersPanel = () => {
+    if (promotions.length === 0) return null;
+    const mainPromo = promotions[0];
+
+    return (
+      <View style={styles.offersPanelContainer}>
         <TouchableOpacity
-          key={promo.id}
-          style={[styles.promoCard, { backgroundColor: promo.color }]}
-          onPress={() => handleRestaurantPress(promo.restaurant)}
+          style={styles.offersPanelCard}
+          onPress={() => toggleOffers(true)}
+          activeOpacity={0.9}
         >
-          <ImageBackground source={{ uri: promo.image }} style={styles.promoBg} imageStyle={{ borderRadius: 20 }}>
+          <ImageBackground
+            source={{ uri: mainPromo.image }}
+            style={styles.offersPanelBg}
+            imageStyle={{ borderRadius: 20 }}
+          >
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.85)']}
-              style={styles.promoGradient}
+              colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.85)']}
+              style={styles.offersPanelGradient}
             >
-              <View style={styles.promoBadge}>
-                <Text style={styles.promoBadgeText}>LIMITED OFFER</Text>
+              <View style={styles.offersPanelHeader}>
+                <View style={[styles.offersBadgeContainer, { backgroundColor: theme.colors.primary }]}>
+                  <Ionicons name="flame" size={14} color="#fff" />
+                  <Text style={styles.offersBadgeText}>TRENDING DEALS</Text>
+                </View>
+                <View style={[styles.offersCountBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                  <Text style={styles.offersCountText}>{promotions.length} OFFERS</Text>
+                </View>
               </View>
-              <Text style={styles.promoTitle} numberOfLines={1}>{promo.title}</Text>
-              <View style={styles.promoFooter}>
-                <Text style={styles.promoSubtitle}>{promo.subtitle}</Text>
-                <View style={styles.pricePill}>
-                  <Text style={styles.pricePillText}>Rs {promo.itemPrice}</Text>
+
+              <View style={styles.offersPanelFooter}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.offersPanelTitle}>Limited Time Offers</Text>
+                  <Text style={styles.offersPanelSubtitle}>Tap to explore exclusive discounts & deals</Text>
+                </View>
+                <View style={[styles.offersPanelArrow, { backgroundColor: theme.colors.primary }]}>
+                  <Ionicons name="chevron-forward" size={24} color="#fff" />
                 </View>
               </View>
             </LinearGradient>
           </ImageBackground>
         </TouchableOpacity>
-      )}
-    />
-  );
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
       <NotificationPopup />
+      <OffersPopup />
 
       <View style={{ backgroundColor: theme.colors.background }}>
         <SafeAreaView style={styles.safeArea}>
@@ -454,7 +576,7 @@ export default function HomeScreen({ navigation }) {
         ListHeaderComponent={() => (
           <View>
             <CategoryStrip />
-            <PromoCarousel />
+            <OffersPanel />
             <ActiveOrderPanel />
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('featured_stores')}</Text>
@@ -595,12 +717,256 @@ const styles = StyleSheet.create({
   emptyNotiText: { marginTop: 16, fontSize: 16 },
   notiBadge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#fff',
+    zIndex: 10
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginRight: 2,
+  },
+  offerListItem: {
+    flexDirection: 'row',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowOpacity: 0.1,
+  },
+  offerItemImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+  },
+  offerItemDetails: {
+    flex: 1,
+    marginLeft: 15,
+    justifyContent: 'center',
+  },
+  offerItemTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  offerItemSubtitle: {
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  offerItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  offerItemPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  claimBadge: {
+    backgroundColor: '#F97316',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  statusPillText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  claimBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  // Offers Panel Styles
+  offersPanelContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 25,
+  },
+  offersPanelCard: {
+    height: 180,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  offersPanelBg: {
+    flex: 1,
+  },
+  offersPanelGradient: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  offersPanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  offersBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  offersBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+    marginLeft: 5,
+  },
+  offersCountBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#fff'
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  offersCountText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  offersPanelFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  offersPanelTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  offersPanelSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  offersPanelArrow: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 15,
+  },
+  notiQRSection: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+  },
+  notiQRTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  notiQRInside: {
+    padding: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    elevation: 2,
+  },
+  notiQRHint: {
+    fontSize: 11,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  viewOrdersBtn: {
+    marginTop: 20,
+    paddingVertical: 15,
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewOrdersText: {
+    fontSize: 13,
+    fontWeight: '900',
+    marginRight: 8,
+    letterSpacing: 1,
+  },
+  notiSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  notiSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  notiCardEmpty: {
+    padding: 30,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+  },
+  notiEmptyText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  notiHistoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  historyIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  historySubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  historyDate: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  viewAllHistoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  viewAllHistoryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginRight: 5,
   }
 });
