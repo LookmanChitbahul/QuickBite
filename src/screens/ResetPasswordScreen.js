@@ -4,8 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '../context/AppContext';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { confirmPasswordReset } from 'firebase/auth';
+import { doc, deleteDoc } from 'firebase/firestore';
 
 export default function ResetPasswordScreen({ navigation, route }) {
     const { email: initialEmail } = route.params || {};

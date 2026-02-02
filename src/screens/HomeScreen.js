@@ -14,15 +14,15 @@ export default function HomeScreen({ navigation }) {
   const { restaurants, orders, theme, isDarkMode, user, toggleFavorite, settings, setActiveTab, t, userAddress, promotions: customPromotions } = useApp();
   const isTablet = Dimensions.get('window').width > 768;
   const [searchQuery, setSearchQuery] = useState('');
+
   // Filter out duplicate brands for display - only show first instance of each brand
   const uniqueBrandRestaurants = useMemo(() => {
     const distinct = [];
     const map = new Map();
     for (const r of restaurants) {
-      const key = r.brand || r.name; // Fallback to name if brand missing
+      const key = r.brand || r.name;
       if (!map.has(key)) {
         map.set(key, true);
-        // Create a display copy with the brand name (e.g. "KFC") instead of specific location
         const displayRest = { ...r, name: r.brand || r.name };
         distinct.push(displayRest);
       }
@@ -45,62 +45,23 @@ export default function HomeScreen({ navigation }) {
     { id: '6', name: t('bakery') || 'Bakery', icon: 'cafe' },
   ];
 
-  // Derive dynamic promotions with accurate keyword-based images
+  // Derive dynamic promotions with fallback and custom promotions from DB
   const promotions = useMemo(() => {
-    const promoItems = [];
-    const seenBrands = new Set();
+    // ONLY use custom promotions added by Owners (Admin) as primary
+    const allPromos = [...customPromotions];
 
-    const getPromoImage = (rest, item) => {
-      // Prioritize the actual item image from mockData/DB
-      if (item && item.image) return item.image;
-
-      const name = (item.name || '').toLowerCase();
-      const brand = (rest.brand || rest.name || '').toLowerCase();
-
-      // Fallbacks
-      if (name.includes('bucket') || brand.includes('kfc'))
-        return 'https://images.unsplash.com/photo-1513639776629-7b61b0ac49cb?auto=format&fit=crop&w=1080&q=80';
-      if (name.includes('pizza') || brand.includes('domino'))
-        return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1080&q=80';
-      if (name.includes('burger') || name.includes('mac') || brand.includes('mcdonald'))
-        return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1080&q=80';
-      if (name.includes('seafood') || brand.includes('ocean'))
-        return 'https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?auto=format&fit=crop&w=1080&q=80';
-
-      return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1080&q=80';
-    };
-
-    restaurants.forEach(rest => {
-      const brandKey = rest.brand || rest.name;
-      if (!seenBrands.has(brandKey) && rest.menu && rest.menu.length > 0) {
-        seenBrands.add(brandKey);
-        const item = rest.menu[0];
-        promoItems.push({
-          id: `promo-${rest.id}`,
-          title: item.name,
-          subtitle: `Special at ${rest.brand || rest.name}`,
-          itemPrice: item.price,
-          image: getPromoImage(rest, item),
-          color: promoItems.length % 2 === 0 ? '#F97316' : '#EA580C',
-          restaurant: rest
-        });
-      }
-    });
-
-    if (promoItems.length === 0) {
-      promoItems.push({
+    if (allPromos.length === 0) {
+      // Fallback promo if none in DB
+      allPromos.push({
         id: 'default-promo',
         title: 'Delicious Deals',
-        subtitle: 'Explore our restaurants',
+        subtitle: 'Explore our latest offers',
         itemPrice: 0,
         image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
         color: '#F97316',
         restaurant: null
       });
     }
-
-    // ONLY use custom promotions added by Owners (Admin)
-    const allPromos = [...customPromotions];
 
     // De-duplicate in case logic overlaps
     const unique = [];
@@ -111,15 +72,30 @@ export default function HomeScreen({ navigation }) {
         ids.add(p.id);
       }
     }
-
     return unique;
   }, [restaurants, customPromotions]);
 
   const [activeCategory, setActiveCategory] = useState(null);
 
-  const activeOrderCount = useMemo(() => orders.filter(o => o.status !== 'Picked Up' && o.status !== 'Payment Rejected').length, [orders]);
-  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'Picked Up' && o.status !== 'Payment Rejected'), [orders]);
-  const latestOrder = useMemo(() => activeOrders.length > 0 ? activeOrders[0] : null, [activeOrders]);
+  // Memos for active orders (excluding picked up and rejected) - filtered for current user
+  const activeOrders = useMemo(() => orders.filter(o => o.userId === user?.uid && o.status !== 'Picked Up' && o.status !== 'Payment Rejected'), [orders, user]);
+  const activeOrderCount = useMemo(() => activeOrders.length, [activeOrders]);
+
+  useEffect(() => {
+    let filtered = uniqueBrandRestaurants;
+    if (searchQuery) {
+      filtered = filtered.filter((restaurant) =>
+        restaurant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        restaurant.brand?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    if (activeCategory) {
+      filtered = filtered.filter((restaurant) =>
+        restaurant.tags?.some(tag => tag.toLowerCase().includes(activeCategory.name.toLowerCase()))
+      );
+    }
+    setFilteredRestaurants(filtered);
+  }, [searchQuery, restaurants, activeCategory]);
 
   const toggleNotifications = (show) => {
     if (show) {
@@ -159,23 +135,8 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  useEffect(() => {
-    let filtered = uniqueBrandRestaurants;
-    if (searchQuery) {
-      filtered = filtered.filter((restaurant) =>
-        restaurant.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    if (activeCategory) {
-      filtered = filtered.filter((restaurant) =>
-        restaurant.tags?.some(tag => tag.toLowerCase().includes(activeCategory.name.toLowerCase()))
-      );
-    }
-    setFilteredRestaurants(filtered);
-  }, [searchQuery, restaurants, activeCategory]);
-
-
   const handleRestaurantPress = (restaurant) => {
+    if (!restaurant) return;
     navigation.navigate('RestaurantDetails', { restaurant });
   };
 
@@ -218,190 +179,119 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-                <ScrollView
-                  style={styles.drawerContent}
-                  showsVerticalScrollIndicator={true}
-                  contentContainerStyle={{ paddingBottom: 60 }}
-                  nestedScrollEnabled={true}
-                  alwaysBounceVertical={true}
-                >
-                  {/* Active Orders Section */}
-                  <View style={styles.notiSectionHeader}>
-                    <Text style={[styles.notiSectionTitle, { color: theme.colors.text }]}>Active Orders</Text>
-                  </View>
-
-                  {activeOrders.length > 0 ? (
-                    activeOrders.map((order) => (
-                      <View key={order.id} style={[styles.notiCard, { backgroundColor: theme.colors.card }]}>
-                        <View style={styles.notiHeader}>
-                          <View style={[styles.notiIcon, { backgroundColor: order.status === 'Confirmed' ? '#10B98120' : theme.colors.primaryLight }]}>
-                            <Ionicons
-                              name={order.status === 'Confirmed' ? "checkmark-circle" : "time-outline"}
-                              size={20}
-                              color={order.status === 'Confirmed' ? '#10B981' : theme.colors.primary}
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.notiType, { color: theme.colors.text }]}>Order Update</Text>
-                            <Text style={[styles.notiTime, { color: theme.colors.textLight }]}>{t('now')}</Text>
-                          </View>
-                          <View style={[styles.statusPill, { backgroundColor: order.status === 'Confirmed' ? '#10B981' : '#F97316' }]}>
-                            <Text style={styles.statusPillText}>{order.status.toUpperCase()}</Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.notiDetails}>
-                          <Text style={[styles.notiInfo, { color: theme.colors.text }]}>Your order from {order.restaurantName} is {order.status.toLowerCase()}.</Text>
-
-                          <View style={[styles.notiDivider, { backgroundColor: theme.colors.border }]} />
-
-                          <Text style={[styles.notiSummaryTitle, { color: theme.colors.textLight }]}>{t('payment_summary')}</Text>
-                          {order.items.map((item, idx) => (
-                            <Text key={idx} style={[styles.notiItem, { color: theme.colors.text }]}>
-                              {item.quantity}x {item.name}
-                            </Text>
-                          ))}
-                          <Text style={[styles.notiTotal, { color: theme.colors.text }]}>{t('total')}: Rs {order.total.toFixed(2)}</Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={[styles.notiAction, { backgroundColor: theme.colors.primary }]}
-                          onPress={() => {
-                            let restaurant = restaurants.find(r => r.id === order.restaurantId) || restaurants.find(r => r.name === order.restaurantName);
-                            toggleNotifications(false);
-                            let targetLoc = restaurant ? restaurant.location : order.location;
-                            setTimeout(() => {
-                              setActiveTab('Map');
-                              navigation.navigate('Map', {
-                                restaurant: restaurant || { name: order.restaurantName, location: targetLoc },
-                                location: targetLoc
-                              });
-                            }, 350);
-                          }}
-                        >
-                          <Text style={styles.notiActionText}>Show Location</Text>
-                          <Ionicons name="location-outline" size={16} color="#fff" />
-                        </TouchableOpacity>
-
-                        {order.status === 'Confirmed' && (
-                          <View style={styles.notiQRSection}>
-                            <Text style={[styles.notiQRTitle, { color: theme.colors.text }]}>Verification QR Code</Text>
-                            <View style={styles.notiQRInside}>
-                              <QRCode
-                                value={JSON.stringify({ orderId: order.id, type: 'pickup' })}
-                                size={120}
-                                color={isDarkMode ? '#FFF' : '#000'}
-                                backgroundColor='transparent'
-                              />
-                            </View>
-                            <Text style={[styles.notiQRHint, { color: theme.colors.textLight }]}>Show this at the counter for pickup</Text>
-                          </View>
-                        )}
-                      </View>
-                    ))
-                  ) : (
-                    <View style={styles.notiCardEmpty}>
-                      <Text style={[styles.notiEmptyText, { color: theme.colors.textLight }]}>No active orders at the moment.</Text>
-                    </View>
-                  )}
-
-                  {/* Order History Section */}
-                  <View style={[styles.notiSectionHeader, { marginTop: 30 }]}>
-                    <Text style={[styles.notiSectionTitle, { color: theme.colors.text }]}>Recent History</Text>
-                  </View>
-
-                  {orders.filter(o => o.status === 'Picked Up' || o.status === 'Payment Rejected').slice(0, 5).map((order) => (
-                    <View key={order.id} style={[styles.notiHistoryItem, { borderBottomColor: theme.colors.border }]}>
-                      <View style={[styles.historyIcon, { backgroundColor: order.status === 'Picked Up' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
-                        <Ionicons name={order.status === 'Picked Up' ? "checkmark" : "close"} size={14} color={order.status === 'Picked Up' ? '#10B981' : '#EF4444'} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={[styles.historyTitle, { color: theme.colors.text }]} numberOfLines={1}>{order.restaurantName}</Text>
-                        <Text style={[styles.historySubtitle, { color: theme.colors.textLight }]}>{order.status} • Rs {order.total.toFixed(0)}</Text>
-                      </View>
-                      <Text style={[styles.historyDate, { color: theme.colors.textLight }]}>{new Date(order.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
-                    </View>
-                  ))}
-
-                  <TouchableOpacity
-                    style={[styles.viewAllHistoryBtn, { marginTop: 15 }]}
-                    onPress={() => {
-                      toggleNotifications(false);
-                      setActiveTab('Orders');
-                    }}
-                  >
-                    <Text style={[styles.viewAllHistoryText, { color: theme.colors.primary }]}>View Detailed History</Text>
-                    <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                </ScrollView>
-              </SafeAreaView>
-            </Animated.View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
-      </Modal>
-    );
-  };
-
-  const OffersPopup = () => {
-    return (
-      <Modal
-        visible={showOffers}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => toggleOffers(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => toggleOffers(false)}
-        >
-          <TouchableWithoutFeedback>
-            <Animated.View
-              style={[
-                styles.sideDrawer,
-                {
-                  backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-                  transform: [{ translateX: offersSlideAnim }]
-                }
-              ]}
-            >
-              <SafeAreaView style={{ flex: 1 }}>
-                <View style={styles.drawerHeader}>
-                  <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>Limited Offers</Text>
-                  <TouchableOpacity onPress={() => toggleOffers(false)}>
-                    <Ionicons name="close" size={24} color={theme.colors.text} />
-                  </TouchableOpacity>
+              <ScrollView
+                style={styles.drawerContent}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={{ paddingBottom: 60 }}
+                nestedScrollEnabled={true}
+                alwaysBounceVertical={true}
+              >
+                {/* Active Orders Section */}
+                <View style={styles.notiSectionHeader}>
+                  <Text style={[styles.notiSectionTitle, { color: theme.colors.text }]}>Active Orders</Text>
                 </View>
 
-                <ScrollView style={styles.drawerContent} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 40 }}>
-                  {promotions.map((promo) => (
-                    <TouchableOpacity
-                      key={promo.id}
-                      style={[styles.offerListItem, { backgroundColor: isDarkMode ? '#1F2937' : '#F9FAFB' }]}
-                      onPress={() => {
-                        toggleOffers(false);
-                        handleRestaurantPress(promo.restaurant);
-                      }}
-                    >
-                      <Image source={{ uri: promo.image }} style={styles.offerItemImage} />
-                      <View style={styles.offerItemDetails}>
-                        <Text style={[styles.offerItemTitle, { color: theme.colors.text }]}>{promo.title}</Text>
-                        <Text style={[styles.offerItemSubtitle, { color: theme.colors.textLight }]}>{promo.subtitle}</Text>
-                        <View style={styles.offerItemFooter}>
-                          <Text style={[styles.offerItemPrice, { color: theme.colors.primary }]}>Rs {promo.itemPrice}</Text>
-                          <View style={styles.claimBadge}>
-                            <Text style={styles.claimBadgeText}>CLAIM</Text>
-                          </View>
+                {activeOrders.length > 0 ? (
+                  activeOrders.map((order) => (
+                    <View key={order.id} style={[styles.notiCard, { backgroundColor: theme.colors.card }]}>
+                      <View style={styles.notiHeader}>
+                        <View style={[styles.notiIcon, { backgroundColor: order.status === 'Confirmed' ? '#10B98120' : theme.colors.primaryLight }]}>
+                          <Ionicons
+                            name={order.status === 'Confirmed' ? "checkmark-circle" : "time-outline"}
+                            size={20}
+                            color={order.status === 'Confirmed' ? '#10B981' : theme.colors.primary}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.notiType, { color: theme.colors.text }]}>Order Update</Text>
+                          <Text style={[styles.notiTime, { color: theme.colors.textLight }]}>{t('now')}</Text>
+                        </View>
+                        <View style={[styles.statusPill, { backgroundColor: order.status === 'Confirmed' ? '#10B981' : '#F97316' }]}>
+                          <Text style={styles.statusPillText}>{order.status.toUpperCase()}</Text>
                         </View>
                       </View>
-                    </TouchableOpacity>
-                  </View>
+
+                      <View style={styles.notiDetails}>
+                        <Text style={[styles.notiInfo, { color: theme.colors.text }]}>Your order from {order.restaurantName} is {order.status.toLowerCase()}.</Text>
+                        <View style={[styles.notiDivider, { backgroundColor: theme.colors.border }]} />
+                        <Text style={[styles.notiSummaryTitle, { color: theme.colors.textLight }]}>{t('payment_summary')}</Text>
+                        {order.items.map((item, idx) => (
+                          <Text key={idx} style={[styles.notiItem, { color: theme.colors.text }]}>
+                            {item.quantity}x {item.name}
+                          </Text>
+                        ))}
+                        <Text style={[styles.notiTotal, { color: theme.colors.text }]}>{t('total')}: Rs {order.total.toFixed(2)}</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.notiAction, { backgroundColor: theme.colors.primary }]}
+                        onPress={() => {
+                          let restaurant = restaurants.find(r => r.id === order.restaurantId) || restaurants.find(r => r.name === order.restaurantName);
+                          toggleNotifications(false);
+                          let targetLoc = restaurant ? restaurant.location : order.location;
+                          setTimeout(() => {
+                            setActiveTab('Map');
+                            navigation.navigate('Map', {
+                              restaurant: restaurant || { name: order.restaurantName, location: targetLoc },
+                              location: targetLoc
+                            });
+                          }, 350);
+                        }}
+                      >
+                        <Text style={styles.notiActionText}>Show Location</Text>
+                        <Ionicons name="location-outline" size={16} color="#fff" />
+                      </TouchableOpacity>
+
+                      {order.status === 'Confirmed' && (
+                        <View style={styles.notiQRSection}>
+                          <Text style={[styles.notiQRTitle, { color: theme.colors.text }]}>Verification QR Code</Text>
+                          <View style={styles.notiQRInside}>
+                            <QRCode
+                              value={JSON.stringify({ orderId: order.id, type: 'pickup' })}
+                              size={120}
+                              color={isDarkMode ? '#FFF' : '#000'}
+                              backgroundColor='transparent'
+                            />
+                          </View>
+                          <Text style={[styles.notiQRHint, { color: theme.colors.textLight }]}>Show this at the counter for pickup</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))
                 ) : (
-                  <View style={styles.emptyNoti}>
-                    <Ionicons name="notifications-off-outline" size={48} color={theme.colors.muted} />
-                    <Text style={[styles.emptyNotiText, { color: theme.colors.muted }]}>{t('no_notifications')}</Text>
+                  <View style={styles.notiCardEmpty}>
+                    <Text style={[styles.notiEmptyText, { color: theme.colors.textLight }]}>No active orders at the moment.</Text>
                   </View>
                 )}
+
+                {/* Order History Section */}
+                <View style={[styles.notiSectionHeader, { marginTop: 30 }]}>
+                  <Text style={[styles.notiSectionTitle, { color: theme.colors.text }]}>Recent History</Text>
+                </View>
+
+                {orders.filter(o => o.status === 'Picked Up' || o.status === 'Payment Rejected').slice(0, 5).map((order) => (
+                  <View key={order.id} style={[styles.notiHistoryItem, { borderBottomColor: theme.colors.border }]}>
+                    <View style={[styles.historyIcon, { backgroundColor: order.status === 'Picked Up' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                      <Ionicons name={order.status === 'Picked Up' ? "checkmark" : "close"} size={14} color={order.status === 'Picked Up' ? '#10B981' : '#EF4444'} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.historyTitle, { color: theme.colors.text }]} numberOfLines={1}>{order.restaurantName}</Text>
+                      <Text style={[styles.historySubtitle, { color: theme.colors.textLight }]}>{order.status} • Rs {order.total.toFixed(0)}</Text>
+                    </View>
+                    <Text style={[styles.historyDate, { color: theme.colors.textLight }]}>{new Date(order.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={[styles.viewAllHistoryBtn, { marginTop: 15 }]}
+                  onPress={() => {
+                    toggleNotifications(false);
+                    setActiveTab('Orders');
+                  }}
+                >
+                  <Text style={[styles.viewAllHistoryText, { color: theme.colors.primary }]}>View Detailed History</Text>
+                  <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
+                </TouchableOpacity>
               </ScrollView>
             </SafeAreaView>
           </Animated.View>
@@ -410,6 +300,69 @@ export default function HomeScreen({ navigation }) {
     </Modal>
   );
 
+  const renderOffersPopup = () => (
+    <Modal
+      visible={showOffers}
+      transparent={true}
+      animationType="none"
+      onRequestClose={() => toggleOffers(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => toggleOffers(false)}
+      >
+        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+          <Animated.View
+            style={[
+              styles.sideDrawer,
+              {
+                backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                transform: [{ translateX: slideAnimOffers }]
+              }
+            ]}
+          >
+            <SafeAreaView style={{ flex: 1 }}>
+              <View style={styles.drawerHeader}>
+                <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>Limited Offers</Text>
+                <TouchableOpacity onPress={() => toggleOffers(false)}>
+                  <Ionicons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.drawerContent} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: 40 }}>
+                {promotions.map((promo) => (
+                  <TouchableOpacity
+                    key={promo.id}
+                    style={[styles.offerRowCard, { backgroundColor: theme.colors.card }]}
+                    onPress={() => {
+                      toggleOffers(false);
+                      handleRestaurantPress(promo.restaurant);
+                    }}
+                  >
+                    <ImageBackground source={{ uri: promo.image }} style={styles.offerRowBg} imageStyle={{ borderRadius: 15 }}>
+                      <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.8)']}
+                        style={styles.offerRowGradient}
+                      >
+                        <View style={styles.priceBadgeTopRight}>
+                          <Text style={styles.offerRowPrice}>Rs {promo.itemPrice}</Text>
+                        </View>
+                        <Text style={styles.offerRowTitle}>{promo.title}</Text>
+                        <View style={styles.offerRowFooter}>
+                          <Text style={styles.offerRowSubtitle}>{promo.subtitle}</Text>
+                        </View>
+                      </LinearGradient>
+                    </ImageBackground>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </SafeAreaView>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   const renderActiveOrderPanel = () => {
     if (activeOrders.length === 0) return null;
@@ -443,73 +396,6 @@ export default function HomeScreen({ navigation }) {
       </View>
     );
   };
-  const renderOffersPopup = () => (
-    <Modal
-      visible={showOffers}
-      transparent={true}
-      animationType="none"
-      onRequestClose={() => toggleOffers(false)}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => toggleOffers(false)}
-      >
-        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-          <Animated.View
-            style={[
-              styles.sideDrawer,
-              {
-                backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                transform: [{ translateX: slideAnimOffers }]
-              }
-            ]}
-          >
-            <SafeAreaView style={{ flex: 1 }}>
-              <View style={styles.drawerHeader}>
-                <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>Limited Offers</Text>
-                <TouchableOpacity onPress={() => toggleOffers(false)}>
-                  <Ionicons name="close" size={24} color={theme.colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.drawerContent} showsVerticalScrollIndicator={false}>
-                {promotions.map((promo) => (
-                  <TouchableOpacity
-                    key={promo.id}
-                    style={[styles.offerRowCard, { backgroundColor: theme.colors.card }]}
-                    onPress={() => {
-                      toggleOffers(false);
-                      handleRestaurantPress(promo.restaurant);
-                    }}
-                  >
-                    <ImageBackground source={{ uri: promo.image }} style={styles.offerRowBg} imageStyle={{ borderRadius: 15 }}>
-                      <LinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.8)']}
-                        style={styles.offerRowGradient}
-                      >
-                        <View style={styles.priceBadgeTopRight}>
-                          <Text style={styles.offerRowPrice}>Rs {promo.itemPrice}</Text>
-                        </View>
-
-                        <Text style={styles.offerRowTitle}>{promo.title}</Text>
-                        <View style={styles.offerRowFooter}>
-                          <Text style={styles.offerRowSubtitle}>{promo.subtitle}</Text>
-                        </View>
-                      </LinearGradient>
-                    </ImageBackground>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </SafeAreaView>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      </TouchableOpacity>
-    </Modal>
-  );
-
-
-
 
   const CategoryStrip = () => (
     <ScrollView
@@ -544,23 +430,17 @@ export default function HomeScreen({ navigation }) {
   );
 
   const LimitedOffersPanel = () => {
-    // Show 'Coming Soon' if no custom promos exist
     const hasPromos = promotions && promotions.length > 0;
-    const featuredPromo = hasPromos ? promotions[0] : {
-      image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1000&q=80', // High quality food placeholder
-      title: 'Fresh Deals',
-      subtitle: 'New offers arriving soon!'
-    };
+    const featuredPromo = hasPromos ? promotions[0] : null;
+
+    if (!featuredPromo) return null;
 
     return (
       <View style={styles.promoContainer}>
         <TouchableOpacity
           style={styles.promoMainCard}
-          onPress={() => {
-            if (hasPromos) toggleOffers(true);
-            // else do nothing or show toast
-          }}
-          activeOpacity={hasPromos ? 0.8 : 1}
+          onPress={() => toggleOffers(true)}
+          activeOpacity={0.8}
         >
           <ImageBackground
             source={{ uri: featuredPromo?.image }}
@@ -571,20 +451,18 @@ export default function HomeScreen({ navigation }) {
               colors={['transparent', 'rgba(0,0,0,0.6)']}
               style={styles.promoMainGradient}
             >
-              <View style={[styles.promoMainBadge, { backgroundColor: hasPromos ? '#EA580C' : '#64748B' }]}>
-                <Ionicons name={hasPromos ? "flash" : "time"} size={12} color="#fff" />
-                <Text style={styles.promoMainBadgeText}>{hasPromos ? "EXCLUSIVE DEALS" : "COMING SOON"}</Text>
+              <View style={[styles.promoMainBadge, { backgroundColor: '#EA580C' }]}>
+                <Ionicons name="flash" size={12} color="#fff" />
+                <Text style={styles.promoMainBadgeText}>EXCLUSIVE DEALS</Text>
               </View>
               <View style={styles.promoMainBottom}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.promoMainTitle}>{featuredPromo.title}</Text>
                   <Text style={styles.promoMainSubtitle}>{featuredPromo.subtitle}</Text>
                 </View>
-                {hasPromos && (
-                  <View style={[styles.promoMainIcon, { backgroundColor: theme.colors.primary }]}>
-                    <Ionicons name="chevron-forward" size={24} color="#fff" />
-                  </View>
-                )}
+                <View style={[styles.promoMainIcon, { backgroundColor: theme.colors.primary }]}>
+                  <Ionicons name="chevron-forward" size={24} color="#fff" />
+                </View>
               </View>
             </LinearGradient>
           </ImageBackground>
@@ -601,7 +479,6 @@ export default function HomeScreen({ navigation }) {
 
       <View style={{ backgroundColor: theme.colors.background }}>
         <SafeAreaView style={styles.safeArea}>
-
           <View style={styles.topHeaderImageContainer}>
             <Image
               source={require('../assets/images/light_food_header.png')}
@@ -635,7 +512,7 @@ export default function HomeScreen({ navigation }) {
               >
                 <Ionicons name="notifications-outline" size={22} color={theme.colors.text} />
                 {activeOrderCount > 0 && (
-                  <View key="notification-badge" style={[styles.notiBadge, { backgroundColor: theme.colors.error }]} />
+                  <View style={[styles.notiBadge, { backgroundColor: theme.colors.error }]} />
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -652,8 +529,6 @@ export default function HomeScreen({ navigation }) {
               <SearchBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
             </View>
           </View>
-
-
         </SafeAreaView>
       </View>
 
@@ -662,7 +537,7 @@ export default function HomeScreen({ navigation }) {
         onPress={handleRestaurantPress}
         onToggleFavorite={handleToggleFavorite}
         numColumns={isTablet ? 2 : 1}
-        key={isTablet ? 'tablet' : 'mobile'} // Force re-render on orientation/size change
+        key={isTablet ? 'tablet' : 'mobile'}
         ListHeaderComponent={() => (
           <View>
             <CategoryStrip />
@@ -727,19 +602,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   searchRow: { paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', marginBottom: 15, zIndex: 10 },
-  filterBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    marginLeft: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-  },
-
   categoryStrip: { paddingLeft: 20, paddingVertical: 20 },
   categoryItem: { alignItems: 'center', marginRight: 24 },
   categoryIcon: {
@@ -759,7 +621,7 @@ const styles = StyleSheet.create({
   promoMainCard: { height: 180, borderRadius: 24, overflow: 'hidden', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   promoMainBg: { width: '100%', height: '100%' },
   promoMainGradient: { flex: 1, padding: 20, justifyContent: 'space-between' },
-  promoMainBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F97316', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
+  promoMainBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
   promoMainBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', marginLeft: 4, letterSpacing: 1 },
   promoMainBottom: { flexDirection: 'row', alignItems: 'center' },
   promoMainTitle: { color: '#fff', fontSize: 26, fontWeight: '900' },
@@ -787,286 +649,57 @@ const styles = StyleSheet.create({
   activeOrderContainer: { paddingHorizontal: 20, marginBottom: 30 },
   activeOrderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   activeOrderTitle: { fontSize: 18, fontWeight: 'bold' },
-  trackText: { fontSize: 14, fontWeight: '600' },
   activeOrderCard: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, elevation: 4, shadowOpacity: 0.1 },
   orderIcon: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
   getOrderInfo: { flex: 1 },
-  orderStatus: { fontSize: 14, fontWeight: 'bold' },
+  orderStatus: { fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
   orderRestaurant: { fontSize: 16, fontWeight: '600' },
   orderItems: { fontSize: 12 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end', flexDirection: 'row' },
-  sideDrawer: { width: '80%', height: '100%', paddingHorizontal: 20, paddingTop: 20, elevation: 8 },
+  sideDrawer: { width: '85%', height: '100%', paddingHorizontal: 20, paddingTop: 20, elevation: 8 },
   drawerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-  drawerTitle: { fontSize: 22, fontWeight: 'bold' },
+  drawerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
   drawerContent: { flex: 1, marginTop: 20 },
   notiCard: { padding: 20, borderRadius: 20, elevation: 3, marginBottom: 20 },
   notiHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   notiIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  notiType: { fontSize: 16, fontWeight: 'bold' },
-  notiTime: { fontSize: 12 },
+  notiType: { fontSize: 13, fontWeight: '800', letterSpacing: 0, marginBottom: 2 },
+  notiTime: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
   notiDetails: { marginBottom: 20 },
-  notiStatus: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 },
-  notiInfo: { fontSize: 15, lineHeight: 22 },
-  notiDivider: { height: 1, marginVertical: 16 },
-  notiSummaryTitle: { fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 8 },
-  notiItem: { fontSize: 14, marginBottom: 4 },
-  notiTotal: { fontSize: 16, fontWeight: 'bold', marginTop: 8 },
+  notiInfo: { fontSize: 15, lineHeight: 24, fontWeight: '500', letterSpacing: 0.2 },
+  notiDivider: { height: 1, marginVertical: 18, opacity: 0.5 },
+  notiSummaryTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 1.2 },
+  notiItem: { fontSize: 14, marginBottom: 6 },
+  notiTotal: { fontSize: 17, fontWeight: '900', marginTop: 10, letterSpacing: 0.5 },
   notiAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12, marginTop: 10 },
   notiActionText: { color: '#fff', fontWeight: 'bold', marginRight: 8 },
-  emptyNoti: { alignItems: 'center', justifyContent: 'center', marginTop: 100 },
-  emptyNotiText: { marginTop: 16, fontSize: 16 },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginLeft: 10 },
+  statusPillText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  notiQRSection: { marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', alignItems: 'center' },
+  notiQRTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 10 },
+  notiQRInside: { padding: 10, backgroundColor: '#fff', borderRadius: 12, elevation: 2 },
+  notiQRHint: { fontSize: 11, marginTop: 8, fontStyle: 'italic' },
   notiBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
+    top: 5,
+    right: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
     borderColor: '#fff',
-    zIndex: 10
+    zIndex: 20
   },
-  viewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  viewAllText: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginRight: 2,
-  },
-  offerListItem: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-    elevation: 2,
-    shadowOpacity: 0.1,
-  },
-  offerItemImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-  },
-  offerItemDetails: {
-    flex: 1,
-    marginLeft: 15,
-    justifyContent: 'center',
-  },
-  offerItemTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  offerItemSubtitle: {
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  offerItemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  offerItemPrice: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  claimBadge: {
-    backgroundColor: '#F97316',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginLeft: 10,
-  },
-  statusPillText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  claimBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  // Offers Panel Styles
-  offersPanelContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 25,
-  },
-  offersPanelCard: {
-    height: 180,
-    borderRadius: 20,
-    overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  offersPanelBg: {
-    flex: 1,
-  },
-  offersPanelGradient: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'space-between',
-  },
-  offersPanelHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  offersBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  offersBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '900',
-    marginLeft: 5,
-  },
-  offersCountBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  offersCountText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  offersPanelFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  offersPanelTitle: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  offersPanelSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  offersPanelArrow: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 15,
-  },
-  notiQRSection: {
-    marginTop: 15,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-    alignItems: 'center',
-  },
-  notiQRTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  notiQRInside: {
-    padding: 10,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    elevation: 2,
-  },
-  notiQRHint: {
-    fontSize: 11,
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  viewOrdersBtn: {
-    marginTop: 20,
-    paddingVertical: 15,
-    borderRadius: 15,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewOrdersText: {
-    fontSize: 13,
-    fontWeight: '900',
-    marginRight: 8,
-    letterSpacing: 1,
-  },
-  notiSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  notiSectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  notiCardEmpty: {
-    padding: 30,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.1)',
-    alignItems: 'center',
-  },
-  notiEmptyText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  notiHistoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  historyIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  historySubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  historyDate: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  viewAllHistoryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-  },
-  viewAllHistoryText: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginRight: 5,
-  }
+  notiSectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  notiSectionTitle: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.7 },
+  notiCardEmpty: { padding: 30, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(0,0,0,0.1)', alignItems: 'center' },
+  notiEmptyText: { fontSize: 14, textAlign: 'center' },
+  notiHistoryItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1 },
+  historyIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  historyTitle: { fontSize: 14, fontWeight: '700' },
+  historySubtitle: { fontSize: 11, marginTop: 2 },
+  historyDate: { fontSize: 10, fontWeight: '600' },
+  viewAllHistoryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  viewAllHistoryText: { fontSize: 13, fontWeight: '700', marginRight: 5 }
 });

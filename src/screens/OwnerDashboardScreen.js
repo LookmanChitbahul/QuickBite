@@ -865,7 +865,11 @@ export default function OwnerDashboardScreen({ navigation }) {
                                         if (!offerPrice) return;
                                         const rest = restaurants.find(r => r.id === offerRestId);
 
-                                        // 1. Create the new promotion
+                                        // 1. Remove existing promos for same item/restaurant (Only one promo per item)
+                                        const existingPromos = promotions.filter(p => p.restaurant?.id === offerRestId && p.title === offerItem.name);
+                                        existingPromos.forEach(p => removePromotion(p.id));
+
+                                        // 2. Create the new promotion
                                         const newPromo = {
                                             id: `promo-custom-${Date.now()}`,
                                             title: offerItem.name,
@@ -876,7 +880,7 @@ export default function OwnerDashboardScreen({ navigation }) {
                                             color: '#EA580C'
                                         };
 
-                                        // 2. Push to global promotions (Home Screen)
+                                        // 3. Push to global promotions (Home Screen)
                                         addPromotion(newPromo);
 
                                         // 3. Update the ACTUAL menu price in the restaurant data

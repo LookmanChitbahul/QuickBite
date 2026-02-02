@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, FlatList, TouchableOpacity, Image, StatusBar, Animated, Easing, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 
 export default function OrderHistoryScreen({ navigation }) {
-    const { orders, theme, isDarkMode, t } = useApp();
+    const { orders, user, theme, isDarkMode, t } = useApp();
 
     // Background Animation
     const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -27,9 +27,58 @@ export default function OrderHistoryScreen({ navigation }) {
         outputRange: ['0deg', '360deg']
     });
 
+    const historyOrders = useMemo(() => {
+        return orders.filter(o => {
+            const isPersonal = user?.isOwner ? (o.userId === user?.uid) : true;
+            return isPersonal &&
+                (o.status === 'Picked Up' || o.status === 'Payment Rejected' || o.status === 'Cancelled');
+        });
+    }, [orders, user?.uid, user?.isOwner]);
+
+    const StatusTimeline = ({ status }) => {
+        const steps = [
+            { id: 'validation', label: 'Payment Verification', icon: 'shield-checkmark', active: ['Awaiting Validation', 'Confirmed', 'Picked Up'].includes(status) },
+            { id: 'pickup', label: 'Ready for Pick Up', icon: 'restaurant', active: ['Confirmed', 'Picked Up'].includes(status) }
+        ];
+
+        return (
+            <View style={styles.timelineContainer}>
+                {steps.map((step, index) => (
+                    <React.Fragment key={step.id}>
+                        <View style={styles.timelineStep}>
+                            <View style={[
+                                styles.timelineIcon,
+                                { backgroundColor: step.active ? theme.colors.success : theme.colors.input }
+                            ]}>
+                                <Ionicons
+                                    name={step.icon}
+                                    size={16}
+                                    color={step.active ? '#fff' : theme.colors.muted}
+                                />
+                            </View>
+                            <Text style={[
+                                styles.timelineLabel,
+                                { color: step.active ? theme.colors.text : theme.colors.muted, fontWeight: step.active ? '700' : '400' }
+                            ]}>
+                                {step.label}
+                            </Text>
+                        </View>
+                        {index < steps.length - 1 && (
+                            <View style={[
+                                styles.timelineLine,
+                                { backgroundColor: steps[index + 1].active ? theme.colors.success : theme.colors.border }
+                            ]} />
+                        )}
+                    </React.Fragment>
+                ))}
+            </View>
+        );
+    };
+
     const renderOrderItem = ({ item }) => {
         const isCompleted = item.status === 'Picked Up';
-        const isActive = !isCompleted && item.status !== 'Cancelled' && item.status !== 'Payment Rejected';
+        const isRejected = item.status === 'Payment Rejected' || item.status === 'Cancelled';
+        const isActive = !isCompleted && !isRejected;
 
         return (
             <TouchableOpacity
@@ -49,30 +98,37 @@ export default function OrderHistoryScreen({ navigation }) {
                             <Ionicons name="restaurant" size={20} color="#fff" />
                         </View>
                         <View>
-                            <Text style={[styles.storeName, { color: theme.colors.text }]}>{item.restaurantName || "Unknown Restaurant"}</Text>
-                            <Text style={[styles.orderId, { color: theme.colors.primary }]}>{t('order_id')}: #{item.id.slice(-6).toUpperCase()}</Text>
-                            <Text style={[styles.orderDate, { color: theme.colors.textLight }]}>{new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                            <Text style={[styles.storeName, { color: theme.colors.text }]}>{item.restaurantName || "Restaurant"}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Text style={[styles.orderId, { color: theme.colors.primary }]}>#{item.id.slice(-6).toUpperCase()}</Text>
+                                <Text style={[styles.dotSeparator, { color: theme.colors.muted }]}> • </Text>
+                                <Text style={[styles.orderDateSmall, { color: theme.colors.textLight }]}>
+                                    {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                            </View>
                         </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                         <Text style={[
                             styles.statusBadge,
-                            (isCompleted || item.status === 'Confirmed')
+                            isCompleted
                                 ? { backgroundColor: theme.colors.successLight, color: theme.colors.success }
-                                : item.status === 'Payment Rejected'
+                                : isRejected
                                     ? { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' }
                                     : { backgroundColor: theme.colors.input, color: theme.colors.muted }
                         ]}>
-                            {item.status}
+                            {item.status.toUpperCase()}
                         </Text>
-                        {item.status === 'Picked Up' && (
+                        {isCompleted && (
                             <Ionicons name="checkmark-done-circle" size={24} color={theme.colors.success} style={{ marginTop: 4 }} />
                         )}
-                        {item.status === 'Payment Rejected' && (
+                        {isRejected && (
                             <Ionicons name="close-circle" size={24} color="#EF4444" style={{ marginTop: 4 }} />
                         )}
                     </View>
                 </View>
+
+                {!isRejected && <StatusTimeline status={item.status} />}
 
                 <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
 
@@ -150,7 +206,7 @@ export default function OrderHistoryScreen({ navigation }) {
                 <View style={{ width: 44 }} />
             </View>
 
-            {orders.length === 0 ? (
+            {historyOrders.length === 0 ? (
                 <View style={styles.emptyContainer}>
                     <Ionicons name="receipt-outline" size={80} color={theme.colors.muted} />
                     <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No History Yet</Text>
@@ -158,7 +214,7 @@ export default function OrderHistoryScreen({ navigation }) {
                 </View>
             ) : (
                 <FlatList
-                    data={orders.filter(o => o.status === 'Picked Up' || o.status === 'Payment Rejected')}
+                    data={historyOrders}
                     keyExtractor={item => item.id}
                     renderItem={renderOrderItem}
                     contentContainerStyle={styles.listContent}
@@ -259,4 +315,34 @@ const styles = StyleSheet.create({
     },
     trackBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     trackText: { fontSize: 12, fontWeight: 'bold', marginRight: 4 },
+    timelineContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 15,
+        paddingHorizontal: 5
+    },
+    timelineStep: {
+        alignItems: 'center',
+        flex: 1
+    },
+    timelineIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 6
+    },
+    timelineLabel: {
+        fontSize: 10,
+        textAlign: 'center'
+    },
+    timelineLine: {
+        width: 30,
+        height: 2,
+        marginTop: -20,
+        flex: 1
+    },
+    dotSeparator: { fontSize: 12, marginHorizontal: 4 },
+    orderDateSmall: { fontSize: 12, fontWeight: '500' },
 });
