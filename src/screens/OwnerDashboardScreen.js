@@ -903,7 +903,7 @@ export default function OwnerDashboardScreen({ navigation }) {
                                             }
                                             return m;
                                         });
-                                        updateRestaurantMenu(rest.id, updatedMenu);
+                                        // 3. Menu update is now handled by AppContext listener automatically
 
                                         setIsOfferModalVisible(false);
                                         Alert.alert("Success", "Offer published & Menu updated!");

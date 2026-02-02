@@ -33,7 +33,14 @@ export default function OrdersScreen({ navigation }) {
     return (
       <TouchableOpacity
         style={[styles.orderCard, { backgroundColor: theme.colors.card }]}
-        activeOpacity={0.9}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('Map', {
+          restaurant: {
+            name: item.restaurantName,
+            location: item.location || { latitude: -20.2443, longitude: 57.4882 }, // Fallback to Bagatelle
+            description: item.restaurantAddress
+          }
+        })}
       >
         <View style={styles.cardHeader}>
           <View style={styles.storeInfo}>
@@ -74,8 +81,8 @@ export default function OrdersScreen({ navigation }) {
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {item.status !== 'Picked Up' && (
               <View style={[styles.trackBtn, { backgroundColor: theme.colors.primaryLight }]}>
-                <Text style={[styles.trackText, { color: theme.colors.primaryDark }]}>Pick up only</Text>
-                <Ionicons name="walk" size={14} color={theme.colors.primaryDark} />
+                <Text style={[styles.trackText, { color: theme.colors.primaryDark }]}>View Location</Text>
+                <Ionicons name="map" size={14} color={theme.colors.primaryDark} />
               </View>
             )}
           </View>

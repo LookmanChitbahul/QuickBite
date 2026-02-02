@@ -70,16 +70,18 @@ export default function CartScreen({ navigation }) {
         Alert.alert("Location Updated", `Order will be placed at ${newOutlet.name}`);
     };
 
-    const handleCheckout = () => {
+    const handleCheckout = async () => {
         if (!finalProof) {
             Alert.alert("Payment Proof Required", "Please upload and INSERT a screenshot of your internet banking transfer to place the order.");
             return;
         }
-        placeOrder(finalProof);
-        Alert.alert("Success!", "Your order has been placed and is awaiting validation. We will verify your payment proof shortly.", [
-            { text: "View Order", onPress: () => { setActiveTab('Orders'); navigation.navigate('Home'); } }, // Navigate to Home tab which holds Orders? No, Orders is a tab.
-            { text: "OK", onPress: () => { setActiveTab('Home'); navigation.navigate('Home'); } }
-        ]);
+        const success = await placeOrder(finalProof);
+        if (success) {
+            Alert.alert("Success!", "Your order has been placed and is awaiting validation. We will verify your payment proof shortly.", [
+                { text: "View Order", onPress: () => { setActiveTab('Orders'); navigation.navigate('Home'); } }, // Navigate to Home tab which holds Orders? No, Orders is a tab.
+                { text: "OK", onPress: () => { setActiveTab('Home'); navigation.navigate('Home'); } }
+            ]);
+        }
     };
 
     const pickProof = async () => {
