@@ -55,7 +55,7 @@ export default function ProfileScreen({ navigation }) {
       {/* Background Image */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.background }]} />
       <LinearGradient
-        colors={isDarkMode ? ['#1a1a1a', '#000000'] : [theme?.colors?.primary || '#F97316', theme?.colors?.primaryDark || '#EA580C']}
+        colors={isDarkMode ? ['#0F172A', '#1E293B'] : ['#FFF7ED', '#FFEDD5']}
         style={styles.headerGradientBg}
       />
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
@@ -70,16 +70,16 @@ export default function ProfileScreen({ navigation }) {
                 style={styles.avatar}
               />
             ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.2)' }]}>
-                <Ionicons name="person-outline" size={32} color="rgba(255,255,255,0.8)" />
+              <View style={[styles.avatarPlaceholder, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' }]}>
+                <Ionicons name="person-outline" size={32} color={isDarkMode ? "rgba(255,255,255,0.8)" : theme.colors.primary} />
               </View>
             )}
 
             <View style={styles.profileInfo}>
               <View style={styles.nameRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.name, { color: '#FFFFFF' }]}>{user.name}</Text>
-                  <Text style={[styles.email, { color: '#E5E7EB' }]}>{user.email}</Text>
+                  <Text style={[styles.name, { color: textColor }]}>{user.name}</Text>
+                  <Text style={[styles.email, { color: subTextColor }]}>{user.email}</Text>
                 </View>
               </View>
             </View>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar, Image, Modal, TextInput, FlatList, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar, Image, Modal, TextInput, FlatList, Platform, Dimensions, Vibration } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,7 +24,11 @@ export default function OwnerDashboardScreen({ navigation }) {
         addRestaurant,
         deleteRestaurant,
         addManualOrder,
-        confirmPickup
+        confirmPickup,
+        addPromotion,
+        removePromotion,
+        updateRestaurantMenu,
+        promotions // access global promos
     } = useApp();
 
     const [scanning, setScanning] = useState(false);
@@ -36,10 +40,18 @@ export default function OwnerDashboardScreen({ navigation }) {
     const [newRest, setNewRest] = useState({ name: '', address: '', description: '', tags: '', image: null });
     const [isReportModalVisible, setIsReportModalVisible] = useState(false);
     const [isResPickerVisible, setIsResPickerVisible] = useState(false);
+    const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
     const [isPreviewVisible, setIsPreviewVisible] = useState(false);
     const [previewContent, setPreviewContent] = useState(null);
     const [isArTestVisible, setIsArTestVisible] = useState(false);
     const [arTestLoc, setArTestLoc] = useState({ lat: '-20.2443', lng: '57.4882', name: 'Test Place' });
+
+    // Offer State
+    const [isOfferModalVisible, setIsOfferModalVisible] = useState(false);
+    const [offerStep, setOfferStep] = useState(1); // 1: Select Rest/Item, 2: Price
+    const [offerRestId, setOfferRestId] = useState(null);
+    const [offerItem, setOfferItem] = useState(null);
+    const [offerPrice, setOfferPrice] = useState('');
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -142,19 +154,7 @@ export default function OwnerDashboardScreen({ navigation }) {
     };
 
     const handleDeleteRestaurant = () => {
-        Alert.alert(
-            "Delete Restaurant",
-            "Select a restaurant to permanently remove:",
-            restaurants.map(r => ({
-                text: r.name,
-                style: 'destructive',
-                onPress: () => {
-                    deleteRestaurant(r.id);
-                    if (revenueResId === r.id) setRevenueResId(null);
-                    Alert.alert("Deleted", `${r.name} has been removed.`);
-                }
-            })).concat([{ text: "Cancel", style: "cancel" }])
-        );
+        setIsDeleteModalVisible(true);
     };
 
     const handleCreateTestOrder = () => {
@@ -173,7 +173,46 @@ export default function OwnerDashboardScreen({ navigation }) {
         Alert.alert("Debug Order Created", "A test order was added to the history. Scroll down to see it in the Recent Transactions log.");
     };
 
-    const handleBarCodeScanned = ({ data }) => {
+    const [lastScanTime, setLastScanTime] = useState(0);
+
+    const handleBarCodeScanned = (event) => {
+        const { data, bounds } = event;
+
+        // Basic throttling to avoid duplicate alerts
+        const now = Date.now();
+        // Rotation-Agnostic Centering Logic
+        if (bounds) {
+            const { width: sw, height: sh } = Dimensions.get('window');
+            const boxSize = 280;
+            const halfBox = boxSize / 2;
+
+            // Screen Center
+            const midX = sw / 2;
+            const midY = sh / 2;
+
+            // QR Center
+            const qrX = bounds.origin.x + (bounds.size.width / 2);
+            const qrY = bounds.origin.y + (bounds.size.height / 2);
+
+            // Check 1: Normal Orientation (View matches Sensor)
+            const isStandardCentered = (
+                Math.abs(qrX - midX) < halfBox &&
+                Math.abs(qrY - midY) < halfBox
+            );
+
+            // Check 2: Rotated Orientation (Sensor is landscape but UI is portrait)
+            // Sometimes sensor coordinates are fixed and don't rotate with UI
+            const isRotatedCentered = (
+                Math.abs(qrY - midX) < halfBox &&
+                Math.abs(qrX - midY) < halfBox
+            );
+
+            if (!isStandardCentered && !isRotatedCentered) return;
+        }
+
+        setLastScanTime(now);
+        Vibration.vibrate(10);
+
         try {
             const qrData = JSON.parse(data);
             const order = orders.find(o => o.id === qrData.orderId);
@@ -592,6 +631,19 @@ export default function OwnerDashboardScreen({ navigation }) {
                     <Text style={[styles.actionText, { color: textColor }]}>Delete Rest.</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity style={[styles.actionCard, { backgroundColor: cardBg }]} onPress={() => {
+                    setOfferStep(1);
+                    setOfferRestId(null);
+                    setOfferItem(null);
+                    setOfferPrice('');
+                    setIsOfferModalVisible(true);
+                }}>
+                    <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(234, 88, 12, 0.2)' : '#FFEDD5' }]}>
+                        <Ionicons name="pricetag" size={32} color="#EA580C" />
+                    </View>
+                    <Text style={[styles.actionText, { color: textColor }]}>Add Offer</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity style={[styles.actionCard, { backgroundColor: cardBg }]} onPress={() => setIsArTestVisible(true)}>
                     <View style={[styles.iconCircle, { backgroundColor: isDarkMode ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE' }]}>
                         <Ionicons name="cube" size={32} color="#8B5CF6" />
@@ -693,6 +745,228 @@ export default function OwnerDashboardScreen({ navigation }) {
                             <Text style={[styles.reportActionText, { color: textColor }]}>Share</Text>
                         </TouchableOpacity>
 
+                        <View style={{ height: 20 }} />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Add Offer Modal */}
+            <Modal visible={isOfferModalVisible} transparent animationType="slide">
+                <View style={[styles.modalOverlay, { justifyContent: 'flex-end' }]}>
+                    <View style={[styles.modalContent, { backgroundColor: cardBg, height: '80%' }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>
+                                {offerStep === 1 ? 'Select Item' : 'Set Price'}
+                            </Text>
+                            <TouchableOpacity onPress={() => setIsOfferModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={textColor} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {offerStep === 1 && (
+                            <ScrollView>
+                                <Text style={{ color: subTextColor, marginBottom: 10 }}>Select a restaurant:</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+                                    {restaurants.map(r => (
+                                        <TouchableOpacity
+                                            key={r.id}
+                                            style={{
+                                                padding: 10,
+                                                marginRight: 10,
+                                                backgroundColor: offerRestId === r.id ? primaryColor : (isDarkMode ? '#374151' : '#E5E7EB'),
+                                                borderRadius: 20
+                                            }}
+                                            onPress={() => setOfferRestId(r.id)}
+                                        >
+                                            <Text style={{ color: offerRestId === r.id ? '#fff' : textColor, fontWeight: 'bold' }}>{r.name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+
+                                {offerRestId && (
+                                    <>
+                                        {/* ACTIVE OFFERS SECTION */}
+                                        <View style={{ marginBottom: 25, backgroundColor: isDarkMode ? '#1e293b' : '#fff7ed', padding: 15, borderRadius: 12 }}>
+                                            <Text style={{ color: primaryColor, fontWeight: 'bold', marginBottom: 10, fontSize: 16 }}>
+                                                <Ionicons name="flash" size={16} /> Active Offers ({promotions.filter(p => p.restaurant?.id === offerRestId).length})
+                                            </Text>
+
+                                            {promotions.filter(p => p.restaurant?.id === offerRestId).length === 0 ? (
+                                                <Text style={{ color: subTextColor, fontStyle: 'italic', fontSize: 13 }}>No active offers for this restaurant.</Text>
+                                            ) : (
+                                                promotions.filter(p => p.restaurant?.id === offerRestId).map(p => (
+                                                    <View key={p.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 8 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                                            <Image source={{ uri: p.image }} style={{ width: 30, height: 30, borderRadius: 6, marginRight: 10 }} />
+                                                            <View>
+                                                                <Text style={{ color: textColor, fontWeight: '600', fontSize: 13 }}>{p.title}</Text>
+                                                                <Text style={{ color: '#10B981', fontWeight: 'bold', fontSize: 12 }}>Rs {p.itemPrice}</Text>
+                                                            </View>
+                                                        </View>
+                                                        <TouchableOpacity
+                                                            style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}
+                                                            onPress={() => {
+                                                                removePromotion(p.id);
+                                                                // Optional: Revert menu price logic could go here if prompted
+                                                                Alert.alert("Deleted", "Offer removed.");
+                                                            }}
+                                                        >
+                                                            <Ionicons name="trash" size={16} color="#EF4444" />
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))
+                                            )}
+                                        </View>
+
+                                        <Text style={{ color: subTextColor, marginBottom: 10 }}>Select an item to create NEW offer:</Text>
+                                        {restaurants.find(r => r.id === offerRestId)?.menu.map((item, idx) => (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={{
+                                                    flexDirection: 'row',
+                                                    alignItems: 'center',
+                                                    padding: 12,
+                                                    marginBottom: 8,
+                                                    backgroundColor: offerItem === item ? (isDarkMode ? '#1e3a8a' : '#DBEAFE') : 'transparent',
+                                                    borderRadius: 12,
+                                                    borderWidth: 1,
+                                                    borderColor: offerItem === item ? primaryColor : borderColor
+                                                }}
+                                                onPress={() => setOfferItem(item)}
+                                            >
+                                                <Image source={{ uri: item.image }} style={{ width: 40, height: 40, borderRadius: 8, marginRight: 12 }} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={{ color: textColor, fontWeight: '600' }}>{item.name}</Text>
+                                                    <Text style={{ color: subTextColor }}>Rs {item.price}</Text>
+                                                </View>
+                                                {offerItem === item && <Ionicons name="checkmark-circle" size={24} color={primaryColor} />}
+                                            </TouchableOpacity>
+                                        ))}
+                                    </>
+                                )}
+
+                                {offerItem && (
+                                    <TouchableOpacity
+                                        style={[styles.saveBtn, { backgroundColor: primaryColor, marginTop: 20 }]}
+                                        onPress={() => setOfferStep(2)}
+                                    >
+                                        <Text style={styles.saveBtnText}>Next</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </ScrollView>
+                        )}
+
+                        {offerStep === 2 && (
+                            <View>
+                                <View style={{ flexDirection: 'row', padding: 15, backgroundColor: isDarkMode ? '#374151' : '#F3F4F6', borderRadius: 12, marginBottom: 20 }}>
+                                    <Image source={{ uri: offerItem?.image }} style={{ width: 60, height: 60, borderRadius: 8, marginRight: 15 }} />
+                                    <View>
+                                        <Text style={{ color: textColor, fontSize: 18, fontWeight: 'bold' }}>{offerItem?.name}</Text>
+                                        <Text style={{ color: subTextColor, textDecorationLine: 'line-through' }}>Original: Rs {offerItem?.price}</Text>
+                                    </View>
+                                </View>
+
+                                <Text style={{ color: textColor, marginBottom: 8, fontWeight: '600' }}>New Promo Price (Rs)</Text>
+                                <TextInput
+                                    style={[styles.input, { color: textColor, borderColor: borderColor, fontSize: 24, paddingVertical: 15 }]}
+                                    value={offerPrice}
+                                    onChangeText={setOfferPrice}
+                                    keyboardType="numeric"
+                                    placeholder="e.g. 199"
+                                    placeholderTextColor={subTextColor}
+                                />
+
+                                <TouchableOpacity
+                                    style={[styles.saveBtn, { backgroundColor: primaryColor, marginTop: 30 }]}
+                                    onPress={() => {
+                                        if (!offerPrice) return;
+                                        const rest = restaurants.find(r => r.id === offerRestId);
+
+                                        // 1. Create the new promotion
+                                        const newPromo = {
+                                            id: `promo-custom-${Date.now()}`,
+                                            title: offerItem.name,
+                                            subtitle: `Limited Offer at ${rest.name}!`,
+                                            itemPrice: parseFloat(offerPrice),
+                                            image: offerItem.image,
+                                            restaurant: rest,
+                                            color: '#EA580C'
+                                        };
+
+                                        // 2. Push to global promotions (Home Screen)
+                                        addPromotion(newPromo);
+
+                                        // 3. Update the ACTUAL menu price in the restaurant data
+                                        const updatedMenu = rest.menu.map(m => {
+                                            if (m.name === offerItem.name) {
+                                                return { ...m, price: parseFloat(offerPrice), originalPrice: m.originalPrice || m.price };
+                                            }
+                                            return m;
+                                        });
+                                        updateRestaurantMenu(rest.id, updatedMenu);
+
+                                        setIsOfferModalVisible(false);
+                                        Alert.alert("Success", "Offer published & Menu updated!");
+                                    }}
+                                >
+                                    <Text style={styles.saveBtnText}>Publish Offer</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={{ alignItems: 'center', marginTop: 15 }}
+                                    onPress={() => setOfferStep(1)}
+                                >
+                                    <Text style={{ color: subTextColor }}>Back</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Delete Restaurant Modal */}
+            <Modal visible={isDeleteModalVisible} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: cardBg }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: textColor }]}>Delete Restaurant</Text>
+                            <TouchableOpacity onPress={() => setIsDeleteModalVisible(false)}>
+                                <Ionicons name="close" size={24} color={textColor} />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={{ color: subTextColor, marginBottom: 15 }}>Select a restaurant to permanently remove:</Text>
+
+                        <ScrollView style={{ maxHeight: 400 }}>
+                            {restaurants.map(r => (
+                                <TouchableOpacity
+                                    key={r.id}
+                                    style={[styles.pickerItem, { borderBottomColor: borderColor, justifyContent: 'space-between' }]}
+                                    onPress={() => {
+                                        Alert.alert(
+                                            "Confirm Deletion",
+                                            `Are you sure you want to delete ${r.name}?`,
+                                            [
+                                                { text: "Cancel", style: "cancel" },
+                                                {
+                                                    text: "Delete", style: 'destructive', onPress: () => {
+                                                        deleteRestaurant(r.id);
+                                                        if (revenueResId === r.id) setRevenueResId('all');
+                                                        setIsDeleteModalVisible(false);
+                                                        Alert.alert("Deleted", `${r.name} has been removed.`);
+                                                    }
+                                                }
+                                            ]
+                                        );
+                                    }}
+                                >
+                                    <View>
+                                        <Text style={[styles.pickerItemText, { color: textColor }]}>{r.name}</Text>
+                                        <Text style={{ fontSize: 11, color: subTextColor }}>{r.address}</Text>
+                                    </View>
+                                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
                         <View style={{ height: 20 }} />
                     </View>
                 </View>
@@ -848,15 +1122,32 @@ export default function OwnerDashboardScreen({ navigation }) {
                         }}
                         style={[StyleSheet.absoluteFillObject, { flex: 1 }]}
                     />
-                    <View style={[styles.scannerOverlay, { flex: 1, justifyContent: 'space-between', paddingVertical: 50 }]}>
-                        <View style={styles.scannerHeader}>
-                            <Text style={styles.scannerTitle}>Scan Customer QR</Text>
-                            <TouchableOpacity onPress={() => setScanning(false)} style={styles.scannerClose}>
-                                <Ionicons name="close-circle" size={40} color="#fff" />
+                    <View style={styles.scannerOverlay}>
+                        {/* Top Overlay */}
+                        <View style={styles.overlaySection} />
+
+                        <View style={styles.middleRow}>
+                            <View style={styles.overlaySection} />
+                            <View style={styles.viewfinderBox}>
+                                <View style={[styles.corner, styles.cornerTopLeft]} />
+                                <View style={[styles.corner, styles.cornerTopRight]} />
+                                <View style={[styles.corner, styles.cornerBottomLeft]} />
+                                <View style={[styles.corner, styles.cornerBottomRight]} />
+                            </View>
+                            <View style={styles.overlaySection} />
+                        </View>
+
+                        {/* Bottom Overlay */}
+                        <View style={[styles.overlaySection, styles.bottomOverlay]}>
+                            <Text style={styles.scannerHint}>Align the QR code within the frame</Text>
+                            <TouchableOpacity onPress={() => setScanning(false)} style={styles.scannerCancelBtn}>
+                                <Text style={styles.scannerCancelText}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
-                        <View style={styles.scannerBox} />
-                        <Text style={styles.scannerHint}>Align the QR code within the frame</Text>
+                    </View>
+
+                    <View style={styles.scannerHeaderFixed}>
+                        <Text style={styles.scannerTitleFixed}>Scan Customer QR</Text>
                     </View>
                 </View>
             </Modal>
@@ -1102,5 +1393,74 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: 13,
         paddingVertical: 10,
+    },
+    // Enhanced Scanner Styles
+    scannerOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
+    },
+    overlaySection: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+    },
+    middleRow: {
+        flexDirection: 'row',
+        height: 280,
+    },
+    viewfinderBox: {
+        width: 280,
+        height: 280,
+        backgroundColor: 'transparent',
+        position: 'relative',
+    },
+    corner: {
+        position: 'absolute',
+        width: 20,
+        height: 20,
+        borderColor: '#10B981',
+        borderWidth: 4,
+    },
+    cornerTopLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
+    cornerTopRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
+    cornerBottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
+    cornerBottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
+    bottomOverlay: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 40,
+    },
+    scannerHint: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '500',
+        textAlign: 'center',
+        marginBottom: 30,
+    },
+    scannerCancelBtn: {
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+        borderRadius: 25,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    scannerCancelText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    scannerHeaderFixed: {
+        position: 'absolute',
+        top: 60,
+        width: '100%',
+        alignItems: 'center',
+    },
+    scannerTitleFixed: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: '800',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10
     }
 });
