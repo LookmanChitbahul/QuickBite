@@ -17,17 +17,53 @@ export const AppProvider = ({ children }) => {
     const [restaurants, setRestaurants] = useState(initialRestaurants);
     const [cart, setCart] = useState([]);
     const [orders, setOrders] = useState([]);
-    // Firestore realtime listener for orders
-    useEffect(() => {
-        const q = query(collection(db, 'orders'), orderBy('date', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            setOrders(fetchedOrders);
-        }, (error) => {
-            console.log("Firestore Snapshot Error (Silent):", error.message);
+    const [promotions, setPromotions] = useState([]); // Custom promotions added by owners
+
+    const addPromotion = (promo) => {
+        // Remove any existing promo for the same item/restaurant to avoid duplicates (Replace logic)
+        setPromotions(prev => {
+            const filtered = prev.filter(p =>
+                !(p.title === promo.title && p.restaurant?.id === promo.restaurant?.id)
+            );
+            return [promo, ...filtered];
         });
-        return () => unsubscribe();
-    }, []);
+    };
+    const removePromotion = (promoId) => {
+        setPromotions(prev => prev.filter(p => p.id !== promoId));
+    };
+
+    // Firestore realtime listener for orders - Moved inside to depend on user
+    useEffect(() => {
+        if (!user) {
+            setOrders([]);
+            return;
+        }
+
+        try {
+            // Filter by userId if not owner, or restaurantId if owner
+            // For now, simple filter to avoid 'Missing or insufficient permissions' on whole collection
+            const ordersRef = collection(db, 'orders');
+            let q;
+
+            if (user.isOwner) {
+                // If we had a specific restaurantId we could filter here
+                q = query(ordersRef, where('restaurantId', '==', user.restaurantId || '2'), orderBy('date', 'desc'));
+            } else {
+                q = query(ordersRef, where('userId', '==', user.uid), orderBy('date', 'desc'));
+            }
+
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                const fetchedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                setOrders(fetchedOrders);
+            }, (error) => {
+                console.log("Firestore Orders Error (Handled):", error.message);
+                // If permissions fail, we still have local history
+            });
+            return () => unsubscribe();
+        } catch (e) {
+            console.log("Listener Setup Error:", e.message);
+        }
+    }, [user?.uid, user?.isOwner, user?.restaurantId]);
 
     const [restaurantLocation, setRestaurantLocation] = useState({ latitude: -20.1609, longitude: 57.5050 });
     const [userLocation, setUserLocation] = useState(null);
@@ -205,9 +241,21 @@ export const AppProvider = ({ children }) => {
                     setUser(null);
                 }
             } catch (error) {
-                console.error("Firebase Auth state error:", error);
-                // On critical error, better to show login than a broken home
-                setUser(null);
+                if (error.code === 'permission-denied') {
+                    console.warn("Firestore access denied. Falling back to Auth only mode.");
+                    // Still set the user from Auth so app isn't stuck
+                    const fallbackUser = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email,
+                        name: firebaseUser.displayName || 'App User',
+                        photoUrl: firebaseUser.photoURL,
+                        isOwner: firebaseUser.email?.includes('owner') || firebaseUser.email === 'owner@gmail.com'
+                    };
+                    setUser(fallbackUser);
+                } else {
+                    console.error("Firebase Auth state error:", error);
+                    setUser(null);
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -493,7 +541,8 @@ export const AppProvider = ({ children }) => {
                 paymentMethods, updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, scheduleNotification,
                 activeTab, setActiveTab, restaurantLocation, setRestaurantLocation, language, changeLanguage, t,
                 updateOrderStatus, addRestaurant, deleteRestaurant, forgotPassword, savedAccounts, saveAccountToHistory,
-                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart, confirmPickup
+                checkUserInDatabase, verifyResetCode, userLocation, userAddress, addManualOrder, setCart, confirmPickup,
+                promotions, addPromotion, removePromotion
             }}
         >
             {children}

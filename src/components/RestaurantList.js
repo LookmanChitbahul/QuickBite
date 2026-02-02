@@ -58,19 +58,21 @@ const RestaurantList = ({ restaurants, onPress, onToggleFavorite, ...props }) =>
                 />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.cuisine, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>Italian • American • Fast Food</Text>
+            <Text style={[styles.cuisine, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>
+              {item.tags ? item.tags.join(' • ') : 'Restaurant • Casual'}
+            </Text>
             <View style={styles.footerRow}>
               <View style={styles.detailItem}>
                 <Ionicons name="time-outline" size={14} color={isDarkMode ? '#9CA3AF' : theme.colors.muted} />
-                <Text style={[styles.detailText, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>20-30 min</Text>
+                <Text style={[styles.detailText, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>25-35 min</Text>
               </View>
               <View style={styles.dot} />
               <View style={styles.detailItem}>
                 <Ionicons name="location-outline" size={14} color={isDarkMode ? '#9CA3AF' : theme.colors.muted} />
-                <Text style={[styles.detailText, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>{item.distance}</Text>
+                <Text style={[styles.detailText, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>{item.distance || '1.2 km'}</Text>
               </View>
               <View style={styles.dot} />
-              <Text style={[styles.detailText, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>$0.99 Fee</Text>
+              <Text style={[styles.detailText, { color: isDarkMode ? '#9CA3AF' : theme.colors.textLight }]}>Rs 50 Fee</Text>
             </View>
           </View>
         </TouchableOpacity>

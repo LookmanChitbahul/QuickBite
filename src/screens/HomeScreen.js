@@ -10,7 +10,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen({ navigation }) {
-  const { restaurants, orders, theme, isDarkMode, user, toggleFavorite, settings, setActiveTab, t, userAddress } = useApp();
+  const { restaurants, orders, theme, isDarkMode, user, toggleFavorite, settings, setActiveTab, t, userAddress, promotions: customPromotions } = useApp();
   const isTablet = Dimensions.get('window').width > 768;
   const [searchQuery, setSearchQuery] = useState('');
   // Filter out duplicate brands for display - only show first instance of each brand
@@ -31,13 +31,9 @@ export default function HomeScreen({ navigation }) {
 
   const [filteredRestaurants, setFilteredRestaurants] = useState(uniqueBrandRestaurants);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showOffers, setShowOffers] = useState(false);
   const slideAnim = useRef(new Animated.Value(width)).current;
-
-  // Carousel state
-  const promoListRef = useRef(null);
-  const [currentPromoIndex, setCurrentPromoIndex] = useState(0);
-  const currentPromoIndexRef = useRef(0);
-  const [scrollDirection, setScrollDirection] = useState(1);
+  const slideAnimOffers = useRef(new Animated.Value(width)).current;
 
   const categories = [
     { id: '1', name: t('chicken') || 'Chicken', icon: 'food-drumstick', type: 'MCI' },
@@ -48,14 +44,33 @@ export default function HomeScreen({ navigation }) {
     { id: '6', name: t('bakery') || 'Bakery', icon: 'cafe' },
   ];
 
-  // Derive dynamic promotions from restaurants menus - ONE per restaurant
+  // Derive dynamic promotions with accurate keyword-based images
   const promotions = useMemo(() => {
     const promoItems = [];
     const seenBrands = new Set();
 
+    const getPromoImage = (rest, item) => {
+      // Prioritize the actual item image from mockData/DB
+      if (item && item.image) return item.image;
+
+      const name = (item.name || '').toLowerCase();
+      const brand = (rest.brand || rest.name || '').toLowerCase();
+
+      // Fallbacks
+      if (name.includes('bucket') || brand.includes('kfc'))
+        return 'https://images.unsplash.com/photo-1513639776629-7b61b0ac49cb?auto=format&fit=crop&w=1080&q=80';
+      if (name.includes('pizza') || brand.includes('domino'))
+        return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1080&q=80';
+      if (name.includes('burger') || name.includes('mac') || brand.includes('mcdonald'))
+        return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1080&q=80';
+      if (name.includes('seafood') || brand.includes('ocean'))
+        return 'https://images.unsplash.com/photo-1510626176961-4b57d4fbad03?auto=format&fit=crop&w=1080&q=80';
+
+      return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1080&q=80';
+    };
+
     restaurants.forEach(rest => {
       const brandKey = rest.brand || rest.name;
-      // Only add if we haven't seen this brand yet
       if (!seenBrands.has(brandKey) && rest.menu && rest.menu.length > 0) {
         seenBrands.add(brandKey);
         const item = rest.menu[0];
@@ -64,14 +79,40 @@ export default function HomeScreen({ navigation }) {
           title: item.name,
           subtitle: `Special at ${rest.brand || rest.name}`,
           itemPrice: item.price,
-          image: item.image || rest.image || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
+          image: getPromoImage(rest, item),
           color: promoItems.length % 2 === 0 ? '#F97316' : '#EA580C',
           restaurant: rest
         });
       }
     });
-    return promoItems;
-  }, [restaurants]);
+
+    if (promoItems.length === 0) {
+      promoItems.push({
+        id: 'default-promo',
+        title: 'Delicious Deals',
+        subtitle: 'Explore our restaurants',
+        itemPrice: 0,
+        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
+        color: '#F97316',
+        restaurant: null
+      });
+    }
+
+    // ONLY use custom promotions added by Owners (Admin)
+    const allPromos = [...customPromotions];
+
+    // De-duplicate in case logic overlaps
+    const unique = [];
+    const ids = new Set();
+    for (const p of allPromos) {
+      if (!ids.has(p.id)) {
+        unique.push(p);
+        ids.add(p.id);
+      }
+    }
+
+    return unique;
+  }, [restaurants, customPromotions]);
 
   const [activeCategory, setActiveCategory] = useState(null);
 
@@ -98,6 +139,25 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  const toggleOffers = (show) => {
+    if (show) {
+      setShowOffers(true);
+      Animated.timing(slideAnimOffers, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.back(0.5)),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideAnimOffers, {
+        toValue: width,
+        duration: 250,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => setShowOffers(false));
+    }
+  };
+
   useEffect(() => {
     let filtered = uniqueBrandRestaurants;
     if (searchQuery) {
@@ -113,25 +173,6 @@ export default function HomeScreen({ navigation }) {
     setFilteredRestaurants(filtered);
   }, [searchQuery, restaurants, activeCategory]);
 
-  // Fixed Carousel Auto-scroll Logic
-  // Simplified Carousel Auto-scroll Logic
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (promoListRef.current && promotions.length > 0) {
-        let nextIndex = currentPromoIndexRef.current + 1;
-        if (nextIndex >= promotions.length) {
-          nextIndex = 0; // Loop back to start
-        }
-        currentPromoIndexRef.current = nextIndex;
-        setCurrentPromoIndex(nextIndex);
-        promoListRef.current.scrollToIndex({
-          index: nextIndex,
-          animated: true,
-        });
-      }
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [promotions.length]);
 
   const handleRestaurantPress = (restaurant) => {
     navigation.navigate('RestaurantDetails', { restaurant });
@@ -146,19 +187,19 @@ export default function HomeScreen({ navigation }) {
     isFavorite: user.favorites ? user.favorites.includes(r.id) : false
   }));
 
-  const NotificationPopup = () => {
-    return (
-      <Modal
-        visible={showNotifications}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => toggleNotifications(false)}
+  const renderNotificationPopup = () => (
+    <Modal
+      visible={showNotifications}
+      transparent={true}
+      animationType="none"
+      onRequestClose={() => toggleNotifications(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => toggleNotifications(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => toggleNotifications(false)}
-        >
+        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
           <Animated.View
             style={[
               styles.sideDrawer,
@@ -262,15 +303,15 @@ export default function HomeScreen({ navigation }) {
               </ScrollView>
             </SafeAreaView>
           </Animated.View>
-        </TouchableOpacity>
-      </Modal>
-    );
-  };
+        </TouchableWithoutFeedback>
+      </TouchableOpacity>
+    </Modal>
+  );
 
-  const ActiveOrderPanel = () => {
-    const activeOrders = orders.filter(o => o.status !== 'Picked Up');
+
+  const renderActiveOrderPanel = () => {
     if (activeOrders.length === 0) return null;
-    const latestOrder = activeOrders[0];
+    const latestActiveOrder = activeOrders[0];
 
     return (
       <View style={styles.activeOrderContainer}>
@@ -286,15 +327,13 @@ export default function HomeScreen({ navigation }) {
           }}
         >
           <View style={[styles.orderIcon, { backgroundColor: theme.colors.primary }]}>
-            {/* Changed icon to map/location style */}
             <Ionicons name="map" size={24} color="#fff" />
           </View>
           <View style={styles.getOrderInfo}>
-            <Text style={[styles.orderStatus, { color: theme.colors.primary }]}>{latestOrder.status}</Text>
-            <Text style={[styles.orderRestaurant, { color: theme.colors.text }]}>{latestOrder.restaurantName}</Text>
-            {/* Cleaned up text, removed potential underscore artifacts */}
+            <Text style={[styles.orderStatus, { color: theme.colors.primary }]}>{latestActiveOrder.status}</Text>
+            <Text style={[styles.orderRestaurant, { color: theme.colors.text }]}>{latestActiveOrder.restaurantName}</Text>
             <Text style={[styles.orderItems, { color: theme.colors.textLight }]}>
-              {latestOrder.status === 'Picked Up' ? 'Order Completed' : 'Track Order'} • {latestOrder.items.length} items
+              {latestActiveOrder.status === 'Picked Up' ? 'Order Completed' : 'Track Order'} • {latestActiveOrder.items.length} items
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
@@ -302,6 +341,71 @@ export default function HomeScreen({ navigation }) {
       </View>
     );
   };
+  const renderOffersPopup = () => (
+    <Modal
+      visible={showOffers}
+      transparent={true}
+      animationType="none"
+      onRequestClose={() => toggleOffers(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => toggleOffers(false)}
+      >
+        <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+          <Animated.View
+            style={[
+              styles.sideDrawer,
+              {
+                backgroundColor: isDarkMode ? 'rgba(17, 24, 39, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                transform: [{ translateX: slideAnimOffers }]
+              }
+            ]}
+          >
+            <SafeAreaView style={{ flex: 1 }}>
+              <View style={styles.drawerHeader}>
+                <Text style={[styles.drawerTitle, { color: theme.colors.text }]}>Limited Offers</Text>
+                <TouchableOpacity onPress={() => toggleOffers(false)}>
+                  <Ionicons name="close" size={24} color={theme.colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.drawerContent} showsVerticalScrollIndicator={false}>
+                {promotions.map((promo) => (
+                  <TouchableOpacity
+                    key={promo.id}
+                    style={[styles.offerRowCard, { backgroundColor: theme.colors.card }]}
+                    onPress={() => {
+                      toggleOffers(false);
+                      handleRestaurantPress(promo.restaurant);
+                    }}
+                  >
+                    <ImageBackground source={{ uri: promo.image }} style={styles.offerRowBg} imageStyle={{ borderRadius: 15 }}>
+                      <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.8)']}
+                        style={styles.offerRowGradient}
+                      >
+                        <View style={styles.priceBadgeTopRight}>
+                          <Text style={styles.offerRowPrice}>Rs {promo.itemPrice}</Text>
+                        </View>
+
+                        <Text style={styles.offerRowTitle}>{promo.title}</Text>
+                        <View style={styles.offerRowFooter}>
+                          <Text style={styles.offerRowSubtitle}>{promo.subtitle}</Text>
+                        </View>
+                      </LinearGradient>
+                    </ImageBackground>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </SafeAreaView>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </TouchableOpacity>
+    </Modal>
+  );
+
 
 
 
@@ -337,55 +441,61 @@ export default function HomeScreen({ navigation }) {
     </ScrollView>
   );
 
-  const PromoCarousel = () => (
-    <FlatList
-      ref={promoListRef}
-      data={promotions}
-      keyExtractor={(item) => item.id}
-      horizontal
-      scrollEnabled={true}
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.promoCarousel}
-      decelerationRate="fast"
-      snapToInterval={width - 25}
-      snapToAlignment="start"
-      getItemLayout={(data, index) => ({
-        length: width - 25,
-        offset: (width - 25) * index,
-        index,
-      })}
-      renderItem={({ item: promo }) => (
+  const LimitedOffersPanel = () => {
+    // Show 'Coming Soon' if no custom promos exist
+    const hasPromos = promotions && promotions.length > 0;
+    const featuredPromo = hasPromos ? promotions[0] : {
+      image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1000&q=80', // High quality food placeholder
+      title: 'Fresh Deals',
+      subtitle: 'New offers arriving soon!'
+    };
+
+    return (
+      <View style={styles.promoContainer}>
         <TouchableOpacity
-          key={promo.id}
-          style={[styles.promoCard, { backgroundColor: promo.color }]}
-          onPress={() => handleRestaurantPress(promo.restaurant)}
+          style={styles.promoMainCard}
+          onPress={() => {
+            if (hasPromos) toggleOffers(true);
+            // else do nothing or show toast
+          }}
+          activeOpacity={hasPromos ? 0.8 : 1}
         >
-          <ImageBackground source={{ uri: promo.image }} style={styles.promoBg} imageStyle={{ borderRadius: 20 }}>
+          <ImageBackground
+            source={{ uri: featuredPromo?.image }}
+            style={styles.promoMainBg}
+            imageStyle={{ borderRadius: 24 }}
+          >
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.85)']}
-              style={styles.promoGradient}
+              colors={['transparent', 'rgba(0,0,0,0.6)']}
+              style={styles.promoMainGradient}
             >
-              <View style={styles.promoBadge}>
-                <Text style={styles.promoBadgeText}>LIMITED OFFER</Text>
+              <View style={[styles.promoMainBadge, { backgroundColor: hasPromos ? '#EA580C' : '#64748B' }]}>
+                <Ionicons name={hasPromos ? "flash" : "time"} size={12} color="#fff" />
+                <Text style={styles.promoMainBadgeText}>{hasPromos ? "EXCLUSIVE DEALS" : "COMING SOON"}</Text>
               </View>
-              <Text style={styles.promoTitle} numberOfLines={1}>{promo.title}</Text>
-              <View style={styles.promoFooter}>
-                <Text style={styles.promoSubtitle}>{promo.subtitle}</Text>
-                <View style={styles.pricePill}>
-                  <Text style={styles.pricePillText}>Rs {promo.itemPrice}</Text>
+              <View style={styles.promoMainBottom}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.promoMainTitle}>{featuredPromo.title}</Text>
+                  <Text style={styles.promoMainSubtitle}>{featuredPromo.subtitle}</Text>
                 </View>
+                {hasPromos && (
+                  <View style={[styles.promoMainIcon, { backgroundColor: theme.colors.primary }]}>
+                    <Ionicons name="chevron-forward" size={24} color="#fff" />
+                  </View>
+                )}
               </View>
             </LinearGradient>
           </ImageBackground>
         </TouchableOpacity>
-      )}
-    />
-  );
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
-      <NotificationPopup />
+      {renderNotificationPopup()}
+      {renderOffersPopup()}
 
       <View style={{ backgroundColor: theme.colors.background }}>
         <SafeAreaView style={styles.safeArea}>
@@ -454,8 +564,8 @@ export default function HomeScreen({ navigation }) {
         ListHeaderComponent={() => (
           <View>
             <CategoryStrip />
-            <PromoCarousel />
-            <ActiveOrderPanel />
+            <LimitedOffersPanel />
+            {renderActiveOrderPanel()}
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{t('featured_stores')}</Text>
               <TouchableOpacity>
@@ -543,23 +653,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
   },
   categoryName: { fontSize: 12, fontWeight: '600' },
-  promoCarousel: { paddingLeft: 20, paddingBottom: 30 },
-  promoCard: {
-    width: width - 40,
-    height: 160,
-    borderRadius: 20,
-    marginRight: 15,
-    overflow: 'hidden',
+  promoContainer: { paddingHorizontal: 20, marginBottom: 25 },
+  promoMainCard: { height: 180, borderRadius: 24, overflow: 'hidden', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  promoMainBg: { width: '100%', height: '100%' },
+  promoMainGradient: { flex: 1, padding: 20, justifyContent: 'space-between' },
+  promoMainBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F97316', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
+  promoMainBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', marginLeft: 4, letterSpacing: 1 },
+  promoMainBottom: { flexDirection: 'row', alignItems: 'center' },
+  promoMainTitle: { color: '#fff', fontSize: 26, fontWeight: '900' },
+  promoMainSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500', marginTop: 2 },
+  promoMainIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', elevation: 2 },
+  offerRowCard: { height: 160, borderRadius: 20, marginBottom: 15, overflow: 'hidden', elevation: 3 },
+  offerRowBg: { width: '100%', height: '100%' },
+  offerRowGradient: { flex: 1, padding: 15, justifyContent: 'flex-end', position: 'relative' },
+  offerRowTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginTop: 10 },
+  offerRowFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  offerRowSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '500' },
+  offerRowPrice: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  priceBadgeTopRight: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    zIndex: 10
   },
-  promoBg: { width: '100%', height: '100%', justifyContent: 'flex-end' },
-  promoGradient: { padding: 15, height: '100%', justifyContent: 'flex-end' },
-  promoBadge: { backgroundColor: '#F97316', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
-  promoBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
-  promoTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 2 },
-  promoFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  promoSubtitle: { color: '#fff', fontSize: 13, fontWeight: '600', opacity: 0.9, flex: 1 },
-  pricePill: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  pricePillText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 20, fontWeight: '900' },
   activeOrderContainer: { paddingHorizontal: 20, marginBottom: 30 },
