@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions, Image, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions, Image, Linking, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -95,6 +95,10 @@ export default function PaymentMethodsScreen({ navigation }) {
         Linking.openURL(url).catch(err => Alert.alert("Error", "Could not open banking link. Please ensure the app is installed."));
     };
 
+    const removeProof = (id) => {
+        setPaymentProofs(prev => prev.filter(p => p.id !== id));
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: bgColor }]}>
             <View style={[styles.header, { backgroundColor: cardColor }]}>
@@ -171,7 +175,7 @@ export default function PaymentMethodsScreen({ navigation }) {
                         </View>
                     )}
 
-                    {paymentMethods.length > 0 ? (
+                    {(paymentMethods || []).length > 0 ? (
                         paymentMethods.map((method) => (
                             <View key={method.id} style={[styles.proofCard, { backgroundColor: cardColor, borderColor: borderColor }]}>
                                 <View style={[styles.bankCircle, { backgroundColor: primaryLightColor, marginRight: 15 }]}>
@@ -236,7 +240,7 @@ export default function PaymentMethodsScreen({ navigation }) {
                 <View style={styles.ordersSection}>
                     <Text style={[styles.sectionHeading, { color: textLightColor, marginTop: 20 }]}>Order Verification Photos</Text>
 
-                    {orders && orders.length > 0 ? (
+                    {(orders || []).length > 0 ? (
                         orders.map((order) => (
                             <View key={order.id} style={[styles.orderProofCard, { backgroundColor: cardColor, borderColor: borderColor }]}>
                                 <View style={styles.orderProofHeader}>

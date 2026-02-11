@@ -177,7 +177,7 @@ export default function OrdersScreen({ navigation }) {
 
   // Memoized filtered orders for personal view
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
+    return (orders || []).filter(o => {
       // For owners, we MUST filter to separate personal orders from business orders
       // For non-owners, the listener already filters by userId
       const isPersonal = user?.isOwner ? (o.userId === user?.uid) : true;
@@ -188,7 +188,7 @@ export default function OrdersScreen({ navigation }) {
     });
   }, [orders, user?.uid, user?.isOwner]);
 
-  if (filteredOrders.length === 0) {
+  if (filteredOrders?.length === 0) {
     return (
       <LinearGradient
         colors={isDarkMode ? [theme.colors.background, '#111827'] : ['#FAFAFA', '#E0F2FE']}
@@ -197,11 +197,11 @@ export default function OrdersScreen({ navigation }) {
         <Ionicons name="receipt-outline" size={80} color={theme.colors.muted} />
         <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No Active Orders</Text>
         <Text style={[styles.emptySubtitle, { color: theme.colors.textLight }]}>
-          {orders.length > 0 && user?.isOwner
+          {(orders || []).length > 0 && user?.isOwner
             ? "You have incoming business orders, but no personal food orders."
             : t('explore_desc')}
         </Text>
-        {orders.length > 0 && user?.isOwner && (
+        {(orders || []).length > 0 && user?.isOwner && (
           <TouchableOpacity
             style={[styles.exploreBtn, { backgroundColor: '#10B981', marginTop: 10 }]}
             onPress={() => navigation.navigate('Home')}

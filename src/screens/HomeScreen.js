@@ -78,8 +78,8 @@ export default function HomeScreen({ navigation }) {
   const [activeCategory, setActiveCategory] = useState(null);
 
   // Memos for active orders (excluding picked up and rejected) - filtered for current user
-  const activeOrders = useMemo(() => orders.filter(o => o.userId === user?.uid && o.status !== 'Picked Up' && o.status !== 'Payment Rejected'), [orders, user]);
-  const activeOrderCount = useMemo(() => activeOrders.length, [activeOrders]);
+  const activeOrders = useMemo(() => orders?.filter(o => o.userId === user?.uid && o.status !== 'Picked Up' && o.status !== 'Payment Rejected') || [], [orders, user]);
+  const activeOrderCount = useMemo(() => activeOrders?.length || 0, [activeOrders]);
 
   useEffect(() => {
     let filtered = uniqueBrandRestaurants;
@@ -388,7 +388,7 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.orderStatus, { color: theme.colors.primary }]}>{latestActiveOrder.status}</Text>
             <Text style={[styles.orderRestaurant, { color: theme.colors.text }]}>{latestActiveOrder.restaurantName}</Text>
             <Text style={[styles.orderItems, { color: theme.colors.textLight }]}>
-              {latestActiveOrder.status === 'Picked Up' ? 'Order Completed' : 'Track Order'} • {latestActiveOrder.items.length} items
+              {latestActiveOrder?.status === 'Picked Up' ? 'Order Completed' : 'Track Order'} • {latestActiveOrder?.items?.length || 0} items
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />

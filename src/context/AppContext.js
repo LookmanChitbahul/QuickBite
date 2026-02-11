@@ -176,7 +176,7 @@ export const AppProvider = ({ children }) => {
                 let loc = await Location.getCurrentPositionAsync({});
                 setUserLocation(loc.coords);
                 let reverse = await Location.reverseGeocodeAsync(loc.coords);
-                if (reverse.length > 0) {
+                if (reverse && reverse.length > 0) {
                     setUserAddress(`${reverse[0].street || ''}, ${reverse[0].city || ''}`);
                 }
             }
@@ -351,7 +351,7 @@ export const AppProvider = ({ children }) => {
             logout, login, completeOnboarding, forgotPassword, checkUserInDatabase, verifyResetCode,
             updateUserProfile, addPaymentMethod, deletePaymentMethod, toggleFavorite, saveAccountToHistory, savedAccounts,
             addPromotion, removePromotion, addManualOrder, deleteRestaurant, addRestaurant, updateRestaurantMenu,
-            userLocation, userAddress, restaurantLocation, setRestaurantLocation, ownerRestaurantId: '2'
+            userLocation, userAddress, restaurantLocation, setRestaurantLocation, ownerRestaurantId: '2', paymentMethods
         }}>
             {children}
         </AppContext.Provider>
