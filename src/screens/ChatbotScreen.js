@@ -82,7 +82,9 @@ export default function ChatbotScreen() {
     };
 
     // STT Start Recording
+
     const startRecording = async () => {
+        if (isRecording) return;
         console.log("Starting recording...");
         try {
             isRecordingReady.current = false;
@@ -143,9 +145,15 @@ export default function ChatbotScreen() {
         try {
             console.log("Stopping recording... isRecordingReady:", isRecordingReady.current);
             console.log("Stopping recording...");
-            // Get recording status to check duration
-            const status = await recordingRef.current.getStatusAsync();
-            if (status.durationMillis < 500) {
+            let status = { durationMillis: 0 };
+            try {
+                status = await recordingRef.current.getStatusAsync();
+            } catch (statusError) {
+                console.warn("Could not get recording status:", statusError);
+                // If we can't get status, we still try to stop
+            }
+
+            if (status.durationMillis > 0 && status.durationMillis < 500) {
                 // Too short, don't even try to stop/transcribe
                 await recordingRef.current.stopAndUnloadAsync().catch(() => { });
                 recordingRef.current = null;
@@ -154,7 +162,15 @@ export default function ChatbotScreen() {
                 return;
             }
 
-            await recordingRef.current.stopAndUnloadAsync();
+            try {
+                await recordingRef.current.stopAndUnloadAsync();
+            } catch (stopError) {
+                console.error("Error stopping recording:", stopError);
+                recordingRef.current = null;
+                isRecordingReady.current = false;
+                setIsTranscribing(false);
+                return;
+            }
             const uri = recordingRef.current.getURI();
             recordingRef.current = null;
             isRecordingReady.current = false;
@@ -172,7 +188,7 @@ export default function ChatbotScreen() {
                     encoding: 'base64',
                 });
 
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${geminiKey}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -183,7 +199,7 @@ export default function ChatbotScreen() {
                                 { text: "Transcribe the following audio precisely. Output ONLY the transcribed text and nothing else. If you hear nothing, output exactly 'NONE'." },
                                 {
                                     inline_data: {
-                                        mime_type: "audio/m4a",
+                                        mime_type: "audio/mp4",
                                         data: base64Audio
                                     }
                                 }
