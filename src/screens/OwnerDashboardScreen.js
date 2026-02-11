@@ -76,7 +76,7 @@ export default function OwnerDashboardScreen({ navigation }) {
     // Revenue calculation
     // Revenue calculation
     const totalRevenue = useMemo(() => {
-        let filteredOrders = orders.filter(o => o.status === 'Confirmed' || o.status === 'Picked Up');
+        let filteredOrders = (orders || []).filter(o => o.status === 'Confirmed' || o.status === 'Picked Up');
 
         if (revenueResId === 'all') {
             // No filter, take all
@@ -112,15 +112,15 @@ export default function OwnerDashboardScreen({ navigation }) {
                     return rest && (rest.brand === brandName || rest.name.includes(brandName));
                 });
             } else {
-                list = list.filter(o => o.restaurantId === revenueResId);
+                list = (list || []).filter(o => o.restaurantId === revenueResId);
             }
         }
         // Sort by date descending
-        return list.sort((a, b) => new Date(b.date) - new Date(a.date));
+        return (list || []).sort((a, b) => new Date(b.date) - new Date(a.date));
     }, [orders, revenueResId, restaurants]);
 
     // Pending orders for ALL restaurants (since we are in an "Owner/Admin" dev mode)
-    const pendingOrders = orders.filter(o => o.status === 'Awaiting Validation');
+    const pendingOrders = (orders || []).filter(o => o.status === 'Awaiting Validation');
 
     const handleOrderStatus = (orderId, status) => {
         updateOrderStatus(orderId, status);
@@ -501,7 +501,7 @@ export default function OwnerDashboardScreen({ navigation }) {
                             <Text style={[styles.transAmount, { color: '#10B981' }]}>+Rs {order.total.toFixed(0)}</Text>
                         </View>
                     ))}
-                    {filteredTransactions.length === 0 && (
+                    {(filteredTransactions || []).length === 0 && (
                         <Text style={[styles.emptyTrans, { color: subTextColor }]}>No transactions yet.</Text>
                     )}
                 </View>
@@ -546,15 +546,15 @@ export default function OwnerDashboardScreen({ navigation }) {
             )}
 
             {/* Ready for Pick Up Section */}
-            <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>Ready for Pick Up ({orders.filter(o => o.status === 'Confirmed').length})</Text>
-            {orders.filter(o => o.status === 'Confirmed').length === 0 ? (
+            <Text style={[styles.sectionTitle, { color: textColor, marginTop: 24 }]}>Ready for Pick Up ({(orders || []).filter(o => o.status === 'Confirmed').length})</Text>
+            {(orders || []).filter(o => o.status === 'Confirmed').length === 0 ? (
                 <View style={[styles.emptyCard, { backgroundColor: cardBg }]}>
                     <Ionicons name="restaurant-outline" size={40} color={subTextColor} />
                     <Text style={[styles.emptyText, { color: subTextColor }]}>No orders ready for pick up.</Text>
                 </View>
             ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 20 }}>
-                    {orders.filter(o => o.status === 'Confirmed').map(order => (
+                    {(orders || []).filter(o => o.status === 'Confirmed').map(order => (
                         <View key={order.id} style={[styles.orderCardHorizontal, { backgroundColor: isDarkMode ? '#1e3020' : '#F0FDF4', borderColor: isDarkMode ? '#065f46' : '#DCFCE7' }]}>
                             <View style={styles.orderHeader}>
                                 <Text style={[styles.orderId, { color: textColor }]}>#{order.id.slice(-6)}</Text>
@@ -771,13 +771,13 @@ export default function OwnerDashboardScreen({ navigation }) {
                                         {/* ACTIVE OFFERS SECTION */}
                                         <View style={{ marginBottom: 25, backgroundColor: isDarkMode ? '#1e293b' : '#fff7ed', padding: 15, borderRadius: 12 }}>
                                             <Text style={{ color: primaryColor, fontWeight: 'bold', marginBottom: 10, fontSize: 16 }}>
-                                                <Ionicons name="flash" size={16} /> Active Offers ({promotions.filter(p => p.restaurant?.id === offerRestId).length})
+                                                <Ionicons name="flash" size={16} /> Active Offers ({(promotions || []).filter(p => p.restaurant?.id === offerRestId).length})
                                             </Text>
 
-                                            {promotions.filter(p => p.restaurant?.id === offerRestId).length === 0 ? (
+                                            {(promotions || []).filter(p => p.restaurant?.id === offerRestId).length === 0 ? (
                                                 <Text style={{ color: subTextColor, fontStyle: 'italic', fontSize: 13 }}>No active offers for this restaurant.</Text>
                                             ) : (
-                                                promotions.filter(p => p.restaurant?.id === offerRestId).map(p => (
+                                                (promotions || []).filter(p => p.restaurant?.id === offerRestId).map(p => (
                                                     <View key={p.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)', paddingBottom: 8 }}>
                                                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                                                             <Image source={{ uri: p.image }} style={{ width: 30, height: 30, borderRadius: 6, marginRight: 10 }} />

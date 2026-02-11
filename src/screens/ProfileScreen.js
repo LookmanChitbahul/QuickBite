@@ -88,12 +88,12 @@ export default function ProfileScreen({ navigation }) {
           {/* Stats Row */}
           <View style={[styles.statsRow, { backgroundColor: glassColor, borderColor: glassBorder, borderWidth: 1 }]}>
             <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: textColor }]}>{orders?.filter(o => o.userId === user.uid).length || 0}</Text>
+              <Text style={[styles.statNumber, { color: textColor }]}>{(orders || []).filter(o => o.userId === user.uid).length}</Text>
               <Text style={[styles.statLabel, { color: subTextColor }]}>{t('my_orders')}</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: dividerColor }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: textColor }]}>{user.favorites?.length || 0}</Text>
+              <Text style={[styles.statNumber, { color: textColor }]}>{(user.favorites || []).length}</Text>
               <Text style={[styles.statLabel, { color: subTextColor }]}>{t('favorites')}</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: dividerColor }]} />
